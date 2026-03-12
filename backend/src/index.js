@@ -6,6 +6,9 @@ const { createServer } = require('http');
 const { Server } = require('socket.io');
 const { PrismaClient } = require('@prisma/client');
 
+// Routes
+const authRoutes = require('./routes/auth');
+
 const app = express();
 const httpServer = createServer(app);
 const prisma = new PrismaClient();
@@ -18,13 +21,11 @@ const io = new Server(httpServer, {
   },
 });
 
-// Store io instance so other files can use it
 app.set('io', io);
 
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
-  // Frontend emits 'join' with a jobId to receive updates for that job
   socket.on('join', ({ jobId }) => {
     socket.join(jobId);
     console.log(`Socket ${socket.id} joined room: ${jobId}`);
@@ -54,12 +55,14 @@ app.use(session({
   },
 }));
 
-// ── Health check route ───────────────────────────────────────────────────────
+// ── Routes ───────────────────────────────────────────────────────────────────
+app.use('/auth', authRoutes);
+
+// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'RepoLens backend is running' });
 });
 
-// ── Placeholder routes (filled in later phases) ──────────────────────────────
 app.get('/', (req, res) => {
   res.json({ message: 'RepoLens API v1.0' });
 });
@@ -69,8 +72,7 @@ const PORT = process.env.PORT || 3001;
 
 httpServer.listen(PORT, async () => {
   console.log(`✅ RepoLens backend running on http://localhost:${PORT}`);
-  
-  // Test database connection
+
   try {
     await prisma.$connect();
     console.log('✅ Database connected successfully');

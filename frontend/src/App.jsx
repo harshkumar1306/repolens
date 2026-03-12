@@ -1,26 +1,69 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { useAuth } from './hooks/useAuth'
+import Home from './pages/Home'
+import Login from './pages/Login'
+import Generate from './pages/Generate'
+import Results from './pages/Results'
+import History from './pages/History'
 
-// Placeholder pages — we'll build these in later phases
-function Home() {
-  return (
-    <div className="min-h-screen bg-white dark:bg-gray-950 flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
-          🔍 RepoLens
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          Phase 1 complete — backend + frontend scaffolding working!
-        </p>
+// Wrapper that redirects to /login if not authenticated
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
       </div>
-    </div>
-  )
+    )
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />
+  }
+
+  return children
 }
 
 function App() {
+  // Apply saved dark mode preference on first load
+  useEffect(() => {
+    const saved = localStorage.getItem('theme')
+    if (saved === 'dark') {
+      document.documentElement.classList.add('dark')
+    }
+  }, [])
+
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/generate"
+          element={
+            <ProtectedRoute>
+              <Generate />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/results/:jobId"
+          element={
+            <ProtectedRoute>
+              <Results />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/history"
+          element={
+            <ProtectedRoute>
+              <History />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   )
