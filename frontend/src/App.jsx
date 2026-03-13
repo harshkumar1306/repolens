@@ -7,6 +7,7 @@ import Generate from './pages/Generate'
 import Results from './pages/Results'
 import History from './pages/History'
 import SocketTest from './pages/SocketTest'
+import Navbar from './components/Navbar'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -19,11 +20,26 @@ function ProtectedRoute({ children }) {
     )
   }
 
-  if (!user) {
-    return <Navigate to="/login" replace />
-  }
-
+  if (!user) return <Navigate to="/login" replace />
   return children
+}
+
+// Placeholder for the full doc viewer — built in Phase 7
+function DocViewerPlaceholder() {
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <Navbar />
+      <div className="max-w-3xl mx-auto px-4 py-16 text-center">
+        <div className="text-5xl mb-4">✅</div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+          Documents Generated!
+        </h1>
+        <p className="text-gray-500 dark:text-gray-400">
+          Full doc viewer coming in Phase 7.
+        </p>
+      </div>
+    </div>
+  )
 }
 
 function App() {
@@ -42,27 +58,19 @@ function App() {
         <Route path="/socket-test" element={<SocketTest />} />
         <Route
           path="/generate"
-          element={
-            <ProtectedRoute>
-              <Generate />
-            </ProtectedRoute>
-          }
+          element={<ProtectedRoute><Generate /></ProtectedRoute>}
         />
         <Route
           path="/results/:jobId"
-          element={
-            <ProtectedRoute>
-              <Results />
-            </ProtectedRoute>
-          }
+          element={<ProtectedRoute><Results /></ProtectedRoute>}
+        />
+        <Route
+          path="/results/:jobId/view"
+          element={<ProtectedRoute><DocViewerPlaceholder /></ProtectedRoute>}
         />
         <Route
           path="/history"
-          element={
-            <ProtectedRoute>
-              <History />
-            </ProtectedRoute>
-          }
+          element={<ProtectedRoute><History /></ProtectedRoute>}
         />
       </Routes>
     </BrowserRouter>
