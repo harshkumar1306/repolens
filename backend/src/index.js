@@ -5,6 +5,7 @@ const session = require('express-session');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const { PrismaClient } = require('@prisma/client');
+const { initSocket } = require('./lib/socket');
 
 // Routes
 const authRoutes = require('./routes/auth');
@@ -21,14 +22,22 @@ const io = new Server(httpServer, {
   },
 });
 
+// Make io available globally via the socket helper
+initSocket(io);
+
+// Also attach to app for use in route handlers
 app.set('io', io);
 
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
+  // Frontend emits 'join' with a jobId to subscribe to that job's updates
   socket.on('join', ({ jobId }) => {
     socket.join(jobId);
     console.log(`Socket ${socket.id} joined room: ${jobId}`);
+
+    // Confirm to the client that they joined successfully
+    socket.emit('joined', { jobId });
   });
 
   socket.on('disconnect', () => {
@@ -51,14 +60,27 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: 7 * 24 * 60 * 60 * 1000,
   },
 }));
 
 // ── Routes ───────────────────────────────────────────────────────────────────
 app.use('/auth', authRoutes);
 
-// Health check
+// ── Test WebSocket emit endpoint (only used for testing Phase 4) ─────────────
+app.post('/test-socket/:jobId', (req, res) => {
+  const { jobId } = req.params;
+  const io = req.app.get('io');
+
+  io.to(jobId).emit('job:status', {
+    status: 'PROCESSING',
+    message: 'This is a test WebSocket message from the backend!',
+  });
+
+  res.json({ sent: true, jobId });
+});
+
+// ── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'RepoLens backend is running' });
 });

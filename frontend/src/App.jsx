@@ -6,8 +6,8 @@ import Login from './pages/Login'
 import Generate from './pages/Generate'
 import Results from './pages/Results'
 import History from './pages/History'
+import SocketTest from './pages/SocketTest'
 
-// Wrapper that redirects to /login if not authenticated
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
 
@@ -27,7 +27,6 @@ function ProtectedRoute({ children }) {
 }
 
 function App() {
-  // Apply saved dark mode preference on first load
   useEffect(() => {
     const saved = localStorage.getItem('theme')
     if (saved === 'dark') {
@@ -40,6 +39,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/socket-test" element={<SocketTest />} />
         <Route
           path="/generate"
           element={
