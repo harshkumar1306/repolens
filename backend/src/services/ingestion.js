@@ -1,6 +1,7 @@
 const { createOctokit } = require('../lib/octokit');
 const { checkRateLimit } = require('./rateLimit');
 const { sleep } = require('../lib/sleep');
+const { emitToJob } = require('../lib/socket');
 const {
   MAX_REPO_FILES,
   MAX_REPO_SIZE_MB,
@@ -8,7 +9,7 @@ const {
   MAX_TIER2_FILES,
 } = require('../lib/constants');
 
-// ── Noise patterns — files/folders we never want to ingest ──────────────────
+// ── Noise patterns ───────────────────────────────────────────────────────────
 const NOISE_PATTERNS = [
   'node_modules', '.git', 'dist', 'build', '.next', 'coverage',
   '__pycache__', '.DS_Store', 'vendor', '.cache', 'tmp',
@@ -21,7 +22,7 @@ function isNoise(filePath) {
   return NOISE_PATTERNS.some((pattern) => filePath.includes(pattern));
 }
 
-// ── Tier 1: Most important files (entry points, configs, schemas) ────────────
+// ── Tier patterns ────────────────────────────────────────────────────────────
 const TIER1_PATTERNS = [
   /^README/i,
   /^package\.json$/,
@@ -40,7 +41,6 @@ const TIER1_PATTERNS = [
   /^server\.(js|ts)$/,
 ];
 
-// ── Tier 2: Important structural files (routes, models, controllers) ─────────
 const TIER2_PATTERNS = [
   /routes?\//i,
   /controllers?\//i,
@@ -57,7 +57,7 @@ function getTier(filePath) {
   return 3;
 }
 
-// ── Parse any GitHub URL format into { owner, repo } ────────────────────────
+// ── Parse GitHub URL ─────────────────────────────────────────────────────────
 function parseRepoUrl(url) {
   try {
     const cleaned = url.trim().replace(/\.git$/, '');
@@ -79,14 +79,13 @@ function parseRepoUrl(url) {
   }
 }
 
-// ── Fetch a single file's content with rate limit guard ──────────────────────
-async function fetchFileContent(octokit, owner, repo, filePath, io, jobId) {
-  await checkRateLimit(octokit, io, jobId);
+// ── Fetch single file with rate guard ────────────────────────────────────────
+async function fetchFileContent(octokit, owner, repo, filePath, jobId) {
+  await checkRateLimit(octokit, jobId);
 
   try {
     const response = await octokit.repos.getContent({ owner, repo, path: filePath });
 
-    // getContent returns base64-encoded content for files
     if (response.data.content) {
       return Buffer.from(response.data.content, 'base64').toString('utf8');
     }
@@ -98,40 +97,34 @@ async function fetchFileContent(octokit, owner, repo, filePath, io, jobId) {
 }
 
 // ── Main ingestion function ──────────────────────────────────────────────────
-async function ingestRepo(repoUrl, accessToken, io = null, jobId = null) {
+async function ingestRepo(repoUrl, accessToken, _unused = null, jobId = null) {
   const { owner, repo } = parseRepoUrl(repoUrl);
   const octokit = createOctokit(accessToken);
 
   function emit(event, data) {
-    if (io && jobId) io.to(jobId).emit(event, data);
+    if (jobId) emitToJob(jobId, event, data);
   }
 
-  // ── LAYER 1: Size check ────────────────────────────────────────────────────
+  // Layer 1: Size check
   emit('job:status', { status: 'PROCESSING', message: 'Checking repository size...' });
 
   let repoMeta;
   try {
     repoMeta = await octokit.repos.get({ owner, repo });
   } catch (err) {
-    if (err.status === 404) {
-      throw new Error('REPO_NOT_FOUND');
-    }
+    if (err.status === 404) throw new Error('REPO_NOT_FOUND');
     throw err;
   }
 
-  const sizeKB = repoMeta.data.size;
-  const sizeMB = sizeKB / 1024;
-
+  const sizeMB = repoMeta.data.size / 1024;
   console.log(`Repo size: ${sizeMB.toFixed(1)} MB`);
 
-  if (sizeMB > MAX_REPO_SIZE_MB) {
-    throw new Error('REPO_TOO_LARGE');
-  }
+  if (sizeMB > MAX_REPO_SIZE_MB) throw new Error('REPO_TOO_LARGE');
 
-  // ── LAYER 2: Fetch file tree + filter noise ────────────────────────────────
+  // Layer 2: File tree + noise filter
   emit('job:status', { status: 'PROCESSING', message: 'Fetching file tree...' });
 
-  await checkRateLimit(octokit, io, jobId);
+  await checkRateLimit(octokit, jobId);
 
   let treeData;
   try {
@@ -150,71 +143,56 @@ async function ingestRepo(repoUrl, accessToken, io = null, jobId = null) {
 
   console.log(`Total files: ${allFiles.length}, After filtering: ${filtered.length}`);
 
-  if (filtered.length > MAX_REPO_FILES) {
-    throw new Error('REPO_TOO_LARGE');
-  }
+  if (filtered.length > MAX_REPO_FILES) throw new Error('REPO_TOO_LARGE');
 
-  emit('job:status', { status: 'PROCESSING', message: `Filtering files... (${filtered.length} relevant files found)` });
+  emit('job:status', {
+    status: 'PROCESSING',
+    message: `Found ${filtered.length} relevant files. Ranking by importance...`,
+  });
 
-  // ── LAYER 3: Tier ranking ──────────────────────────────────────────────────
-  emit('job:status', { status: 'PROCESSING', message: 'Ranking files by importance...' });
+  // Layer 3: Tier ranking
+  const tier1Files = filtered.filter((f) => getTier(f.path) === 1).slice(0, MAX_TIER1_FILES);
+  const tier2Files = filtered.filter((f) => getTier(f.path) === 2).slice(0, MAX_TIER2_FILES);
+  const tier3Paths = filtered.filter((f) => getTier(f.path) === 3).map((f) => f.path);
 
-  const tier1Files = filtered
-    .filter((f) => getTier(f.path) === 1)
-    .slice(0, MAX_TIER1_FILES);
+  console.log(`Tier 1: ${tier1Files.length}, Tier 2: ${tier2Files.length}, Tier 3: ${tier3Paths.length}`);
 
-  const tier2Files = filtered
-    .filter((f) => getTier(f.path) === 2)
-    .slice(0, MAX_TIER2_FILES);
-
-  const tier3Paths = filtered
-    .filter((f) => getTier(f.path) === 3)
-    .map((f) => f.path);
-
-  console.log(`Tier 1: ${tier1Files.length}, Tier 2: ${tier2Files.length}, Tier 3 paths: ${tier3Paths.length}`);
-
-  // ── LAYER 4: Fetch file contents with rate limit guard ────────────────────
-  emit('job:status', { status: 'PROCESSING', message: 'Fetching key file contents...' });
+  // Layer 4: Fetch contents
+  emit('job:status', {
+    status: 'PROCESSING',
+    message: `Fetching ${tier1Files.length + tier2Files.length} key files...`,
+  });
 
   const tier1Contents = {};
   for (let i = 0; i < tier1Files.length; i++) {
     const file = tier1Files[i];
-    const content = await fetchFileContent(octokit, owner, repo, file.path, io, jobId);
-    if (content) {
-      tier1Contents[file.path] = content;
-    }
-
-    // Check rate limit every 20 files
-    if (i > 0 && i % 20 === 0) {
-      await checkRateLimit(octokit, io, jobId);
-    }
+    const content = await fetchFileContent(octokit, owner, repo, file.path, jobId);
+    if (content) tier1Contents[file.path] = content;
+    if (i > 0 && i % 20 === 0) await checkRateLimit(octokit, jobId);
   }
 
   const tier2Contents = {};
   for (let i = 0; i < tier2Files.length; i++) {
     const file = tier2Files[i];
-    const content = await fetchFileContent(octokit, owner, repo, file.path, io, jobId);
-    if (content) {
-      tier2Contents[file.path] = content;
-    }
-
-    if (i > 0 && i % 20 === 0) {
-      await checkRateLimit(octokit, io, jobId);
-    }
+    const content = await fetchFileContent(octokit, owner, repo, file.path, jobId);
+    if (content) tier2Contents[file.path] = content;
+    if (i > 0 && i % 20 === 0) await checkRateLimit(octokit, jobId);
   }
 
-  emit('job:status', { status: 'PROCESSING', message: 'File ingestion complete. Starting document generation...' });
+  emit('job:status', {
+    status: 'PROCESSING',
+    message: 'File ingestion complete. Starting document generation...',
+  });
 
-  // ── Return structured result ───────────────────────────────────────────────
   return {
     owner,
     repo,
     repoName: `${owner}/${repo}`,
     sizeMB: sizeMB.toFixed(1),
     totalFiles: filtered.length,
-    tier1: tier1Contents,  // { "path": "content", ... }
+    tier1: tier1Contents,
     tier2: tier2Contents,
-    tier3Paths,            // just paths, no content
+    tier3Paths,
   };
 }
 

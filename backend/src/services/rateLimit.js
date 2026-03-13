@@ -1,38 +1,36 @@
 const { sleep } = require('../lib/sleep');
+const { emitToJob } = require('../lib/socket');
 const { RATE_LIMIT_THRESHOLD } = require('../lib/constants');
 
 /**
- * Checks GitHub API rate limit.
- * If remaining calls < 50, pauses until the limit resets.
- * Optionally emits a WebSocket event to the frontend.
+ * Checks GitHub rate limit after every Octokit call.
+ * If remaining < 50, pauses execution until reset.
  */
-async function checkRateLimit(octokit, io = null, jobId = null) {
+async function checkRateLimit(octokit, jobId = null) {
   try {
     const rateLimit = await octokit.rateLimit.get();
     const remaining = rateLimit.data.rate.remaining;
-    const resetTime = rateLimit.data.rate.reset; // Unix timestamp in seconds
+    const resetTime = rateLimit.data.rate.reset;
 
-    console.log(`GitHub rate limit: ${remaining} calls remaining`);
+    console.log(`GitHub rate limit: ${remaining} remaining`);
 
     if (remaining < RATE_LIMIT_THRESHOLD) {
-      const waitMs = (resetTime * 1000) - Date.now() + 5000; // +5s buffer
+      const waitMs = (resetTime * 1000) - Date.now() + 5000;
       const waitSeconds = Math.ceil(waitMs / 1000);
 
-      console.log(`⚠️  Rate limit low. Pausing ${waitSeconds}s until reset.`);
+      console.log(`⚠️  Rate limit low. Pausing ${waitSeconds}s.`);
 
-      // Notify frontend if socket is available
-      if (io && jobId) {
-        io.to(jobId).emit('job:rateLimit', {
+      if (jobId) {
+        emitToJob(jobId, 'job:rateLimit', {
           message: `GitHub API rate limit reached. Pausing ingestion and resuming in ${waitSeconds} seconds...`,
           resumeIn: waitSeconds,
         });
       }
 
       await sleep(waitMs);
-      console.log('✅ Rate limit reset. Resuming.');
+      console.log('✅ Resuming after rate limit reset.');
     }
   } catch (err) {
-    // If rate limit check itself fails, log and continue
     console.error('Rate limit check failed:', err.message);
   }
 }
