@@ -5,20 +5,23 @@
  */
 
 function formatFiles(filesObj) {
-    if (!filesObj || Object.keys(filesObj).length === 0) {
-      return '(No files available)';
-    }
-  
-    return Object.entries(filesObj)
-      .map(([path, content]) => {
-        // Truncate very large files to avoid blowing token limits
-        const truncated = content.length > 8000
-          ? content.slice(0, 8000) + '\n\n[...file truncated for length...]'
-          : content;
-        return `### File: ${path}\n\`\`\`\n${truncated}\n\`\`\``;
-      })
-      .join('\n\n');
+  if (!filesObj || Object.keys(filesObj).length === 0) {
+    return '(No files available)';
   }
+
+  // Hard limit: max 20 files per prompt, 4000 chars per file
+  // This prevents token limit errors on large repos
+  const entries = Object.entries(filesObj).slice(0, 20);
+
+  return entries
+    .map(([path, content]) => {
+      const truncated = content.length > 4000
+        ? content.slice(0, 4000) + '\n\n[...file truncated...]'
+        : content;
+      return `### File: ${path}\n\`\`\`\n${truncated}\n\`\`\``;
+    })
+    .join('\n\n');
+}
   
   function formatPathList(paths) {
     if (!paths || paths.length === 0) return '(none)';

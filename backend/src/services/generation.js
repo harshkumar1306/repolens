@@ -48,11 +48,14 @@ async function processJob(jobId, repoUrl, accessToken) {
     try {
       ingested = await ingestRepo(repoUrl, accessToken, null, jobId);
     } catch (err) {
-      const message = err.message === 'REPO_TOO_LARGE'
-        ? 'This repository is too large for free tier analysis. RepoLens works best with repos under 50MB and 2,000 files.'
-        : err.message === 'REPO_NOT_FOUND'
-        ? 'Repository not found. Make sure the URL is correct and the repo is public.'
-        : `Ingestion failed: ${err.message}`;
+      const message =
+        err.message === 'REPO_TOO_LARGE'
+          ? 'This repository is too large for free tier analysis. RepoLens works best with repos under 50MB and 2,000 files.'
+          : err.message === 'REPO_NOT_FOUND'
+          ? 'Repository not found. Make sure the URL is correct and the repo is public.'
+          : err.message.includes('rate limit') || err.message.includes('403')
+          ? 'GitHub API rate limit reached. Please wait a few minutes and try again.'
+          : `Ingestion failed: ${err.message}`;
 
       await prisma.job.update({
         where: { id: jobId },
@@ -87,8 +90,22 @@ async function processJob(jobId, repoUrl, accessToken) {
           console.log(`  ✅ ${type} done (${content.length} chars)`);
         } catch (err) {
           failureCount++;
-          console.error(`  ❌ ${type} failed after all retries:`, err.message);
-          content = '[Generation failed for this document. Try regenerating.]';
+
+          // Detect specific error types for better logging
+          const isTokenLimit = err.message?.includes('too long') ||
+            err.message?.includes('max_tokens') ||
+            err.message?.includes('token')
+          const isBilling = err.message?.includes('credit balance')
+
+          if (isBilling) {
+            console.error(`  ❌ ${type} failed: Anthropic billing issue`)
+          } else if (isTokenLimit) {
+            console.error(`  ❌ ${type} failed: prompt too large (token limit)`)
+          } else {
+            console.error(`  ❌ ${type} failed:`, err.message)
+          }
+
+          content = '[Generation failed for this document. Try regenerating.]'
         }
 
         // Save document to DB immediately

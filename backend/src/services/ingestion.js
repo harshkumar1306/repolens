@@ -11,11 +11,36 @@ const {
 
 // ── Noise patterns ───────────────────────────────────────────────────────────
 const NOISE_PATTERNS = [
-  'node_modules', '.git', 'dist', 'build', '.next', 'coverage',
-  '__pycache__', '.DS_Store', 'vendor', '.cache', 'tmp',
-  '.lock', '.log', '.png', '.jpg', '.jpeg', '.gif', '.svg',
-  '.ico', '.woff', '.woff2', '.ttf', '.eot', '.mp4', '.mp3',
-  '.min.js', '.min.css', '.map', '.zip', '.tar', '.gz',
+  // Package managers
+  'node_modules', 'vendor', '.pnp',
+  // Build outputs
+  'dist', 'build', '.next', 'out', '__pycache__', '.nuxt',
+  '.output', 'target', 'bin', 'obj',
+  // Version control
+  '.git',
+  // Test snapshots and coverage
+  'coverage', '__snapshots__', '.nyc_output',
+  // Cache and temp
+  '.cache', 'tmp', '.temp', '.turbo', '.parcel-cache',
+  // OS files
+  '.DS_Store', 'Thumbs.db',
+  // Binary/media assets
+  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico',
+  '.woff', '.woff2', '.ttf', '.eot', '.otf',
+  '.mp4', '.mp3', '.wav', '.ogg', '.webm',
+  '.pdf', '.zip', '.tar', '.gz', '.rar',
+  '.exe', '.dll', '.so', '.dylib',
+  // Minified/compiled
+  '.min.js', '.min.css', '.map',
+  // Lock files
+  'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml',
+  'poetry.lock', 'Pipfile.lock', 'composer.lock',
+  'Gemfile.lock', 'cargo.lock',
+  // Generated/vendor docs
+  'CHANGELOG', 'LICENSE', 'LICENCE',
+  '.pyc', '.pyo', '.pyd',
+  // IDE
+  '.idea', '.vscode', '.vs',
 ];
 
 function isNoise(filePath) {

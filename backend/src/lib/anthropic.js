@@ -6,10 +6,17 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-/**
- * Calls Claude with automatic retry + exponential backoff.
- * If all retries fail, throws the last error.
- */
+// Errors that will never succeed on retry — fail immediately
+function isUnretryable(err) {
+  const msg = err.message || ''
+  return (
+    msg.includes('credit balance') ||
+    msg.includes('invalid_api_key') ||
+    msg.includes('permission') ||
+    (err.status === 400 && msg.includes('invalid_request'))
+  )
+}
+
 async function callClaudeWithRetry(prompt, maxRetries = CLAUDE_MAX_RETRIES) {
   let lastError;
 
@@ -24,10 +31,17 @@ async function callClaudeWithRetry(prompt, maxRetries = CLAUDE_MAX_RETRIES) {
       return response.content[0].text;
     } catch (err) {
       lastError = err;
+
+      // Don't retry errors that will never succeed
+      if (isUnretryable(err)) {
+        console.error(`Claude unretryable error:`, err.message);
+        throw err;
+      }
+
       console.error(`Claude attempt ${attempt}/${maxRetries} failed:`, err.message);
 
       if (attempt < maxRetries) {
-        const backoff = attempt * 2000; // 2s, 4s, 6s
+        const backoff = attempt * 2000;
         console.log(`Retrying in ${backoff / 1000}s...`);
         await sleep(backoff);
       }
