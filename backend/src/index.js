@@ -7,7 +7,6 @@ const { Server } = require('socket.io');
 const { PrismaClient } = require('@prisma/client');
 const { initSocket } = require('./lib/socket');
 
-// Routes
 const authRoutes = require('./routes/auth');
 const jobRoutes = require('./routes/jobs');
 const documentRoutes = require('./routes/documents');
@@ -17,10 +16,16 @@ const app = express();
 const httpServer = createServer(app);
 const prisma = new PrismaClient();
 
+// ── Allowed origins ──────────────────────────────────────────────────────────
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:5173',
+].filter(Boolean);
+
 // ── Socket.io ────────────────────────────────────────────────────────────────
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: allowedOrigins,
     credentials: true,
   },
 });
@@ -44,11 +49,14 @@ io.on('connection', (socket) => {
 
 // ── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: allowedOrigins,
   credentials: true,
 }));
 
 app.use(express.json());
+
+// Trust Render's proxy so secure cookies work over HTTPS
+app.set('trust proxy', 1);
 
 app.use(session({
   secret: process.env.SESSION_SECRET || 'fallback_secret',
@@ -57,6 +65,7 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   },
 }));
@@ -67,7 +76,6 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/export', exportRoutes);
 
-// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'RepoLens backend is running' });
 });
@@ -80,11 +88,11 @@ app.get('/', (req, res) => {
 const PORT = process.env.PORT || 3001;
 
 httpServer.listen(PORT, async () => {
-  console.log(`✅ RepoLens backend running on http://localhost:${PORT}`);
+  console.log(`✅ RepoLens backend running on port ${PORT}`);
 
   try {
     await prisma.$connect();
-    console.log('✅ Database connected successfully');
+    console.log('✅ Database connected');
   } catch (err) {
     console.error('❌ Database connection failed:', err.message);
   }
