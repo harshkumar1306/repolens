@@ -1,5 +1,4 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { useEffect } from 'react'
 import { useAuth } from './hooks/useAuth'
 import Home from './pages/Home'
 import Login from './pages/Login'
@@ -24,13 +23,6 @@ function ProtectedRoute({ children }) {
 }
 
 function App() {
-  useEffect(() => {
-    const saved = localStorage.getItem('theme')
-    if (saved === 'dark') {
-      document.documentElement.classList.add('dark')
-    }
-  }, [])
-
   return (
     <BrowserRouter>
       <Routes>
@@ -41,7 +33,6 @@ function App() {
           path="/generate"
           element={<ProtectedRoute><Generate /></ProtectedRoute>}
         />
-        {/* Both /results/:jobId and /results/:jobId/view handled by same component */}
         <Route
           path="/results/:jobId"
           element={<ProtectedRoute><Results /></ProtectedRoute>}

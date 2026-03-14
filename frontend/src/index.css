@@ -2,20 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Smooth dark mode transitions */
-* {
+/* Prevent flash of unstyled content */
+html {
+  background-color: #ffffff;
+}
+html.dark {
+  background-color: #030712;
+}
+
+/* Smooth theme transitions — but not on page load */
+html.theme-ready * {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
-/* Custom scrollbar for dark mode */
-:root {
-  color-scheme: light dark;
+/* Hide scrollbar on tab rows but keep scroll functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
-body {
-  @apply bg-white text-gray-900;
+/* Smooth page transitions */
+#root {
+  animation: fadeIn 0.15s ease-in;
 }
 
-.dark body {
-  @apply bg-gray-950 text-gray-100;
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
