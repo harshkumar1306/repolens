@@ -5,19 +5,17 @@ const { createOctokit } = require('../lib/octokit');
 
 const prisma = new PrismaClient();
 
-// ── Step 1: Redirect user to GitHub login ────────────────────────────────────
-// GET /auth/github
+// GET /auth/github — redirect to GitHub
 router.get('/github', (req, res) => {
   const params = new URLSearchParams({
     client_id: process.env.GITHUB_CLIENT_ID,
-    redirect_uri: `${req.protocol}://${req.get('host')}/auth/github/callback`,
+    redirect_uri: `${process.env.BACKEND_URL}/auth/github/callback`,
     scope: 'read:user',
   });
 
   res.redirect(`https://github.com/login/oauth/authorize?${params}`);
 });
 
-// ── Step 2: GitHub redirects back here with a code ──────────────────────────
 // GET /auth/github/callback
 router.get('/github/callback', async (req, res) => {
   const { code } = req.query;
@@ -27,7 +25,6 @@ router.get('/github/callback', async (req, res) => {
   }
 
   try {
-    // Exchange code for access token
     const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
       method: 'POST',
       headers: {
@@ -38,6 +35,7 @@ router.get('/github/callback', async (req, res) => {
         client_id: process.env.GITHUB_CLIENT_ID,
         client_secret: process.env.GITHUB_CLIENT_SECRET,
         code,
+        redirect_uri: `${process.env.BACKEND_URL}/auth/github/callback`,
       }),
     });
 
@@ -49,12 +47,9 @@ router.get('/github/callback', async (req, res) => {
     }
 
     const accessToken = tokenData.access_token;
-
-    // Fetch user info from GitHub
     const octokit = createOctokit(accessToken);
     const { data: githubUser } = await octokit.users.getAuthenticated();
 
-    // Upsert user in database (create if new, update if existing)
     const user = await prisma.user.upsert({
       where: { githubId: String(githubUser.id) },
       update: {
@@ -70,9 +65,13 @@ router.get('/github/callback', async (req, res) => {
       },
     });
 
-    // Save user ID to session
     req.session.userId = user.id;
-    req.session.save(() => {
+    req.session.save((err) => {
+      if (err) {
+        console.error('Session save error:', err);
+        return res.redirect(`${process.env.FRONTEND_URL}/login?error=session_failed`);
+      }
+      console.log('✅ Session saved for user:', user.username);
       res.redirect(`${process.env.FRONTEND_URL}/`);
     });
 
@@ -82,7 +81,6 @@ router.get('/github/callback', async (req, res) => {
   }
 });
 
-// ── Return current logged-in user ────────────────────────────────────────────
 // GET /auth/me
 router.get('/me', async (req, res) => {
   if (!req.session?.userId) {
@@ -112,7 +110,6 @@ router.get('/me', async (req, res) => {
   }
 });
 
-// ── Logout ───────────────────────────────────────────────────────────────────
 // GET /auth/logout
 router.get('/logout', (req, res) => {
   req.session.destroy(() => {
