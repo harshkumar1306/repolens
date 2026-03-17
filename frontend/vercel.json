@@ -2,11 +2,11 @@
     "rewrites": [
       {
         "source": "/auth/:path*",
-        "destination": "https://YOUR_RENDER_URL/auth/:path*"
+        "destination": "https://repolens-backend-awkk.onrender.com/auth/:path*"
       },
       {
         "source": "/api/:path*",
-        "destination": "https://YOUR_RENDER_URL/api/:path*"
+        "destination": "https://repolens-backend-awkk.onrender.com/api/:path*"
       },
       {
         "source": "/(.*)",
