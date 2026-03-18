@@ -80,7 +80,7 @@ app.use(session({
     // so we can use lax sameSite and don't need secure:true workarounds
     secure: isProduction,
     httpOnly: true,
-    sameSite: isProduction ? 'none' : 'lax',
+    sameSite: isProduction ? 'lax' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   },
 }));
