@@ -18,12 +18,12 @@ const NAV_ITEMS = [
   { to: '/history', end: false, label: 'History',   Icon: Clock },
 ];
 
-/* ─── Inner content (used in both desktop + mobile) ─────────────── */
+/* ─── Sidebar inner content ─────────────────────────────────────── */
 function SidebarInner({ user, onNewAnalysis, onLogout, sidebarSlot }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minWidth: 224 }}>
 
-      {/* New Analysis — hidden when results slot is active */}
+      {/* New Analysis */}
       {!sidebarSlot && (
         <div style={{ padding: '4px 12px 10px' }}>
           <button
@@ -66,15 +66,13 @@ function SidebarInner({ user, onNewAnalysis, onLogout, sidebarSlot }) {
           borderTop: '1px solid var(--border)',
           display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
         }}>
-          {/* Avatar */}
           {user?.avatarUrl ? (
             <img
               src={user.avatarUrl}
               alt={user.username}
               style={{
                 width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                border: '1.5px solid var(--border-hover)',
-                objectFit: 'cover',
+                border: '1.5px solid var(--border-hover)', objectFit: 'cover',
               }}
               onError={(e) => { e.currentTarget.style.display = 'none'; }}
             />
@@ -88,7 +86,6 @@ function SidebarInner({ user, onNewAnalysis, onLogout, sidebarSlot }) {
               {(user?.username || 'U')[0].toUpperCase()}
             </div>
           )}
-
           <span style={{
             flex: 1, minWidth: 0,
             fontFamily: '"DM Mono",monospace', fontSize: 12,
@@ -97,13 +94,7 @@ function SidebarInner({ user, onNewAnalysis, onLogout, sidebarSlot }) {
           }}>
             {user?.username || 'user'}
           </span>
-
-          <button
-            onClick={onLogout}
-            title="Sign out"
-            className="sidebar-icon-btn"
-            style={{ flexShrink: 0 }}
-          >
+          <button onClick={onLogout} title="Sign out" className="sidebar-icon-btn" style={{ flexShrink: 0 }}>
             <LogOut size={13} />
           </button>
         </div>
@@ -120,7 +111,7 @@ export default function Sidebar() {
     sidebarCollapsed, setSidebarCollapsed,
     sidebarSlot,
   } = useContext(AppContext);
-  const navigate    = useNavigate();
+  const navigate     = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogout = async () => {
@@ -130,24 +121,27 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* ── Desktop sidebar ──────────────────────────────────────── */}
+      {/* ── Desktop sidebar ──────────────────────────────────────────
+          Key fix: never use display:none. Use width:0 + overflow:hidden.
+          Framer Motion animates the width; content is hidden by overflow.
+      ──────────────────────────────────────────────────────────────── */}
       <motion.aside
         animate={{ width: sidebarCollapsed ? 0 : 224 }}
         transition={{ type: 'spring', damping: 30, stiffness: 280 }}
         style={{
           background: 'var(--bg-sidebar)',
-          borderRight: sidebarCollapsed ? 'none' : '1px solid var(--border)',
+          borderRight: '1px solid var(--border)',
           height: '100%',
-          overflow: 'hidden',
+          overflow: 'hidden',      /* hides content when width → 0 */
           flexShrink: 0,
-          display: 'none',
+          /* NO display:none — that prevents Framer Motion from working */
         }}
-        className="md:block"
+        className="hidden md:flex flex-col"
       >
         {/* Logo row */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,
-          padding: '14px 12px 8px', minWidth: 224, // prevent reflow during animation
+          padding: '14px 12px 8px', flexShrink: 0, minWidth: 224,
         }}>
           <div style={{
             width: 28, height: 28, borderRadius: 8, flexShrink: 0,
@@ -158,13 +152,10 @@ export default function Sidebar() {
           </div>
           <span style={{
             fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: 15,
-            color: 'var(--text-primary)', letterSpacing: '-0.02em',
-            whiteSpace: 'nowrap',
+            color: 'var(--text-primary)', letterSpacing: '-0.02em', whiteSpace: 'nowrap',
           }}>
             RepoLens
           </span>
-
-          {/* Collapse toggle */}
           <button
             onClick={() => setSidebarCollapsed(true)}
             title="Collapse sidebar"
@@ -183,41 +174,44 @@ export default function Sidebar() {
         />
       </motion.aside>
 
-      {/* ── Floating expand button (visible when collapsed) ──────── */}
+      {/* ── Floating expand button — only shown when sidebar is collapsed ── */}
       <AnimatePresence>
         {sidebarCollapsed && (
           <motion.button
             key="expand-btn"
-            initial={{ opacity: 0, x: -8 }}
+            initial={{ opacity: 0, x: -6 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -8 }}
-            transition={{ duration: 0.18 }}
+            exit={{ opacity: 0, x: -6 }}
+            transition={{ duration: 0.15 }}
             onClick={() => setSidebarCollapsed(false)}
             title="Expand sidebar"
+            className="hidden md:flex items-center justify-center"
             style={{
-              position: 'absolute',
-              top: 10,
-              left: 8,
-              zIndex: 20,
-              padding: 7,
+              position: 'absolute', top: 10, left: 8, zIndex: 20,
+              width: 32, height: 32,
+              padding: 0,
               borderRadius: 8,
               background: 'var(--bg-sidebar)',
               border: '1px solid var(--border)',
               color: 'var(--text-muted)',
               cursor: 'pointer',
               transition: 'color 0.15s, border-color 0.15s',
-              display: 'none',
             }}
-            className="md:flex items-center justify-center"
-            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'var(--text-primary)';
+              e.currentTarget.style.borderColor = 'var(--border-hover)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--text-muted)';
+              e.currentTarget.style.borderColor = 'var(--border)';
+            }}
           >
             <PanelLeftOpen size={14} />
           </motion.button>
         )}
       </AnimatePresence>
 
-      {/* ── Mobile top bar ───────────────────────────────────────── */}
+      {/* ── Mobile top bar ─────────────────────────────────────────── */}
       <div
         className="md:hidden flex items-center justify-between px-4 py-3 absolute top-0 left-0 right-0 z-30"
         style={{ background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--border)' }}
@@ -234,15 +228,12 @@ export default function Sidebar() {
             RepoLens
           </span>
         </div>
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="sidebar-icon-btn"
-        >
+        <button onClick={() => setMobileOpen(true)} className="sidebar-icon-btn">
           <PanelLeftOpen size={18} />
         </button>
       </div>
 
-      {/* ── Mobile drawer ────────────────────────────────────────── */}
+      {/* ── Mobile drawer ──────────────────────────────────────────── */}
       <AnimatePresence>
         {mobileOpen && (
           <>
@@ -255,10 +246,10 @@ export default function Sidebar() {
             <motion.div
               initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-              className="fixed left-0 top-0 bottom-0 z-50 md:hidden"
+              className="fixed left-0 top-0 bottom-0 z-50 md:hidden flex flex-col"
               style={{ width: 224, background: 'var(--bg-sidebar)', borderRight: '1px solid var(--border)' }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 12px 8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 12px 8px', flexShrink: 0 }}>
                 <div style={{
                   width: 28, height: 28, borderRadius: 8,
                   background: 'linear-gradient(135deg,#E45B11,#F8AB0B)',
