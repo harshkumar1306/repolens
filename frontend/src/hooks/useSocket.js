@@ -1,99 +1,39 @@
-import { useEffect, useRef, useState } from 'react'
-import { io } from 'socket.io-client'
+import { useEffect, useRef } from 'react';
+import { io } from 'socket.io-client';
 
-export function useSocket(jobId) {
-  const socketRef = useRef(null)
-  const [connected, setConnected] = useState(false)
-  const [messages, setMessages] = useState([])
-  const [docs, setDocs] = useState({})
-  const [jobDone, setJobDone] = useState(false)
-  const [jobError, setJobError] = useState(null)
-  const [cached, setCached] = useState(false)
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
+
+export function useSocket(jobId, handlers) {
+  const socketRef = useRef(null);
+  const handlersRef = useRef(handlers);
+
+  // Keep handlers ref current without re-connecting
+  useEffect(() => {
+    handlersRef.current = handlers;
+  });
 
   useEffect(() => {
-    if (!jobId) return
+    if (!jobId) return;
 
-    // Socket connects directly to Render (WebSockets can't be proxied through Vercel)
-    // Only REST API calls go through the Vercel proxy
-    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001', {
+    const socket = io(SOCKET_URL, {
       withCredentials: true,
-    })
+      transports: ['websocket', 'polling'],
+    });
+    socketRef.current = socket;
 
-    socketRef.current = socket
+    socket.emit('join', { jobId });
 
-    socket.on('connect', () => {
-      setConnected(true)
-      console.log('Socket connected:', socket.id)
-      socket.emit('join', { jobId })
-    })
-
-    socket.on('joined', ({ jobId: confirmedJobId }) => {
-      console.log('Joined job room:', confirmedJobId)
-    })
-
-    socket.on('job:status', (data) => {
-      setMessages((prev) => [...prev, { type: 'status', ...data, time: Date.now() }])
-    })
-
-    socket.on('job:rateLimit', (data) => {
-      setMessages((prev) => [...prev, { type: 'rateLimit', ...data, time: Date.now() }])
-    })
-
-    socket.on('job:docComplete', (data) => {
-      setDocs((prev) => ({ ...prev, [data.type]: data.content }))
-      setMessages((prev) => [...prev, {
-        type: 'docComplete',
-        message: `Generated: ${data.type}`,
-        docType: data.type,
-        time: Date.now(),
-      }])
-    })
-
-    socket.on('job:done', (data) => {
-      setJobDone(true)
-      setMessages((prev) => [...prev, {
-        type: 'done',
-        message: 'All documents generated!',
-        time: Date.now(),
-      }])
-    })
-
-    socket.on('job:cached', (data) => {
-      setCached(true)
-      setJobDone(true)
-      setMessages((prev) => [...prev, {
-        type: 'cached',
-        message: data.message || 'Loaded from cache — docs ready instantly!',
-        time: Date.now(),
-      }])
-    })
-
-    socket.on('job:error', (data) => {
-      setJobError(data.message)
-      setMessages((prev) => [...prev, {
-        type: 'error',
-        message: data.message,
-        time: Date.now(),
-      }])
-    })
-
-    socket.on('disconnect', () => {
-      setConnected(false)
-      console.log('Socket disconnected')
-    })
+    // Register stable wrappers that call the latest handlers ref
+    const events = Object.keys(handlersRef.current);
+    events.forEach((event) => {
+      socket.on(event, (...args) => handlersRef.current[event]?.(...args));
+    });
 
     return () => {
-      socket.disconnect()
-    }
-  }, [jobId])
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [jobId]);
 
-  return {
-    socket: socketRef.current,
-    connected,
-    messages,
-    docs,
-    jobDone,
-    jobError,
-    cached,
-  }
+  return socketRef;
 }

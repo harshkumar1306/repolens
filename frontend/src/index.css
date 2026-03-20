@@ -2,34 +2,109 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Prevent flash of unstyled content */
-html {
-  background-color: #ffffff;
-}
-html.dark {
-  background-color: #030712;
-}
-
-/* Smooth theme transitions — but not on page load */
-html.theme-ready * {
-  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-}
-
-/* Hide scrollbar on tab rows but keep scroll functionality */
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
+/* ─── Design Tokens ─────────────────────────── */
+:root {
+  --bg:           #1C1C1A;
+  --bg-surface:   #252521;
+  --bg-elevated:  #2E2E2A;
+  --bg-sidebar:   #171715;
+  --border:       rgba(226, 228, 213, 0.07);
+  --border-hover: rgba(226, 228, 213, 0.15);
+  --text-primary:   #E2E4D5;
+  --text-secondary: #B0B2A3;
+  --text-muted:     #585B4A;
+  --accent:       #E45B11;
+  --accent-flame: #F4860D;
+  --accent-amber: #F8AB0B;
+  --accent-gold:  #FBC255;
+  --glow:         rgba(228, 91, 17, 0.15);
+  --glow-strong:  rgba(228, 91, 17, 0.28);
 }
 
-/* Smooth page transitions */
-#root {
-  animation: fadeIn 0.15s ease-in;
+/* ─── Reset ──────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+body {
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+/* ─── Scrollbar ──────────────────────────────── */
+::-webkit-scrollbar          { width: 4px; height: 4px; }
+::-webkit-scrollbar-track    { background: transparent; }
+::-webkit-scrollbar-thumb    { background: var(--text-muted); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+
+/* ─── Prose (Markdown) ───────────────────────── */
+.prose {
+  --tw-prose-body:        var(--text-primary);
+  --tw-prose-headings:    var(--text-primary);
+  --tw-prose-lead:        var(--text-secondary);
+  --tw-prose-links:       var(--accent-amber);
+  --tw-prose-bold:        var(--text-primary);
+  --tw-prose-counters:    var(--text-secondary);
+  --tw-prose-bullets:     var(--text-muted);
+  --tw-prose-hr:          var(--border);
+  --tw-prose-quotes:      var(--text-primary);
+  --tw-prose-quote-borders: var(--accent);
+  --tw-prose-captions:    var(--text-secondary);
+  --tw-prose-code:        var(--accent-amber);
+  --tw-prose-pre-code:    var(--text-primary);
+  --tw-prose-pre-bg:      var(--bg-elevated);
+  --tw-prose-th-borders:  var(--border);
+  --tw-prose-td-borders:  var(--border);
+  max-width: none !important;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.prose table {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.prose thead {
+  background: var(--bg-surface);
+}
+
+.prose th,
+.prose td {
+  border-color: var(--border) !important;
+}
+
+/* Remove backtick wrapping on inline code */
+.prose code::before,
+.prose code::after { content: '' !important; }
+
+.prose code {
+  background: rgba(248, 171, 11, 0.09);
+  padding: 0.1em 0.38em;
+  border-radius: 4px;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.84em;
+  color: var(--accent-amber) !important;
+}
+
+/* ─── Utilities ──────────────────────────────── */
+.ember-glow {
+  box-shadow: 0 0 20px var(--glow), 0 0 40px var(--glow);
+}
+
+/* Mermaid override */
+.mermaid svg { max-width: 100%; }

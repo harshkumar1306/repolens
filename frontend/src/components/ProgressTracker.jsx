@@ -1,116 +1,138 @@
-const DOC_TYPES = [
-    { type: 'OVERVIEW', label: 'Project Overview', icon: '📋' },
-    { type: 'SPEC', label: 'Reverse Engineer Spec', icon: '🔧' },
-    { type: 'ARCHITECTURE', label: 'System Architecture', icon: '🏗️' },
-    { type: 'TECHSTACK', label: 'Tech Stack', icon: '⚙️' },
-    { type: 'DATABASE', label: 'Database Schema', icon: '🗄️' },
-    { type: 'API', label: 'API Reference', icon: '🔌' },
-    { type: 'SETUP', label: 'Developer Setup', icon: '💻' },
-    { type: 'DEPLOYMENT', label: 'Deployment Guide', icon: '🚀' },
-  ]
-  
-  export default function ProgressTracker({ messages, docs, jobError, cached, repoName }) {
-    const completedTypes = Object.keys(docs)
-    const completedCount = completedTypes.length
-    const totalCount = DOC_TYPES.length
-    const progressPercent = Math.round((completedCount / totalCount) * 100)
-  
-    // Get the latest status message
-    const latestMessage = messages
-      .filter((m) => m.type === 'status' || m.type === 'rateLimit')
-      .at(-1)
-  
-    return (
-      <div className="max-w-2xl mx-auto px-4 py-12">
-  
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="text-4xl mb-3">
-            {jobError ? '❌' : cached ? '⚡' : '🔍'}
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
-            {jobError
-              ? 'Generation Failed'
-              : cached
-              ? 'Loaded from Cache!'
-              : 'Analyzing Repository'}
-          </h1>
-          {repoName && (
-            <p className="text-gray-500 dark:text-gray-400 text-sm font-mono">
-              {repoName}
+import { motion } from 'framer-motion';
+import { CheckCircle, Loader2, Circle, Clock } from 'lucide-react';
+
+const ALL_DOCS = [
+  { type: 'OVERVIEW',     label: 'Project Overview'    },
+  { type: 'SPEC',         label: 'Reverse Eng. Spec'   },
+  { type: 'ARCHITECTURE', label: 'Architecture'         },
+  { type: 'TECHSTACK',    label: 'Tech Stack'           },
+  { type: 'DATABASE',     label: 'Database Schema'      },
+  { type: 'API',          label: 'API Reference'        },
+  { type: 'SETUP',        label: 'Setup Guide'          },
+  { type: 'DEPLOYMENT',   label: 'Deployment Guide'     },
+];
+
+export default function ProgressTracker({ completedTypes = [], currentMessage, rateLimitMsg }) {
+  const done = new Set(completedTypes);
+  const currentIdx = ALL_DOCS.findIndex((d) => !done.has(d.type));
+  const progress = completedTypes.length / ALL_DOCS.length;
+
+  return (
+    <div
+      className="flex flex-col h-full overflow-y-auto shrink-0"
+      style={{
+        width: '220px',
+        background: 'var(--bg-sidebar)',
+        borderRight: '1px solid var(--border)',
+        padding: '20px 14px',
+      }}
+    >
+      {/* Header */}
+      <div style={{ marginBottom: '18px' }}>
+        <p
+          style={{
+            fontFamily: 'Syne, sans-serif', fontWeight: 700,
+            fontSize: '13px', color: 'var(--text-primary)', marginBottom: '4px',
+          }}
+        >
+          Generating
+        </p>
+        <p style={{ fontFamily: '"DM Mono", monospace', fontSize: '11px', color: 'var(--text-muted)' }}>
+          {completedTypes.length} / {ALL_DOCS.length} docs
+        </p>
+
+        {/* Progress bar */}
+        <div
+          style={{
+            marginTop: '10px', height: '3px', borderRadius: '2px',
+            background: 'var(--bg-elevated)', overflow: 'hidden',
+          }}
+        >
+          <motion.div
+            style={{
+              height: '100%', borderRadius: '2px',
+              background: 'linear-gradient(90deg, #E45B11, #F8AB0B)',
+            }}
+            initial={{ width: 0 }}
+            animate={{ width: `${progress * 100}%` }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+          />
+        </div>
+      </div>
+
+      {/* Doc checklist */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+        {ALL_DOCS.map(({ type, label }, i) => {
+          const isDone    = done.has(type);
+          const isCurrent = !isDone && i === currentIdx;
+
+          return (
+            <motion.div
+              key={type}
+              initial={{ opacity: 0, x: -6 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.04 }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+                padding: '7px 10px', borderRadius: '7px',
+                background: isCurrent ? 'rgba(228,91,17,0.08)' : 'transparent',
+                transition: 'background 0.2s',
+              }}
+            >
+              {isDone ? (
+                <CheckCircle size={13} style={{ color: '#F8AB0B', flexShrink: 0 }} />
+              ) : isCurrent ? (
+                <Loader2
+                  size={13}
+                  style={{
+                    color: '#E45B11', flexShrink: 0,
+                    animation: 'spin 1s linear infinite',
+                  }}
+                />
+              ) : (
+                <Circle size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+              )}
+              <span
+                style={{
+                  fontFamily: '"DM Mono", monospace', fontSize: '11px',
+                  color: isDone
+                    ? 'var(--text-secondary)'
+                    : isCurrent
+                    ? 'var(--text-primary)'
+                    : 'var(--text-muted)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}
+              >
+                {label}
+              </span>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Status / rate-limit message */}
+      {(currentMessage || rateLimitMsg) && (
+        <div
+          style={{
+            marginTop: '14px', padding: '10px 12px', borderRadius: '8px',
+            background: rateLimitMsg ? 'rgba(251,194,85,0.07)' : 'var(--bg-elevated)',
+            border: `1px solid ${rateLimitMsg ? 'rgba(251,194,85,0.2)' : 'var(--border)'}`,
+          }}
+        >
+          {rateLimitMsg ? (
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '7px' }}>
+              <Clock size={11} style={{ color: '#FBC255', marginTop: 1, flexShrink: 0 }} />
+              <p style={{ fontFamily: '"DM Mono", monospace', fontSize: '10px', color: '#FBC255', lineHeight: 1.5 }}>
+                {rateLimitMsg}
+              </p>
+            </div>
+          ) : (
+            <p style={{ fontFamily: '"DM Mono", monospace', fontSize: '10px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              {currentMessage}
             </p>
           )}
         </div>
-  
-        {/* Error state */}
-        {jobError && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-6 text-sm text-red-600 dark:text-red-400 text-center">
-            {jobError}
-          </div>
-        )}
-  
-        {/* Cached banner */}
-        {cached && (
-          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4 mb-6 text-sm text-green-600 dark:text-green-400 text-center">
-            ⚡ Loaded from cache — docs ready instantly!
-          </div>
-        )}
-  
-        {/* Progress bar */}
-        {!jobError && (
-          <div className="mb-6">
-            <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-2">
-              <span>{latestMessage?.message || 'Starting...'}</span>
-              <span>{completedCount}/{totalCount}</span>
-            </div>
-            <div className="h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-          </div>
-        )}
-  
-        {/* Document checklist */}
-        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-          {DOC_TYPES.map((doc, i) => {
-            const isDone = completedTypes.includes(doc.type)
-            const isLast = i === DOC_TYPES.length - 1
-  
-            return (
-              <div
-                key={doc.type}
-                className={`flex items-center gap-3 px-5 py-4 ${!isLast ? 'border-b border-gray-100 dark:border-gray-800' : ''}`}
-              >
-                {/* Status icon */}
-                <div className="w-6 flex justify-center">
-                  {isDone ? (
-                    <span className="text-green-500 text-lg">✓</span>
-                  ) : jobError ? (
-                    <span className="text-gray-300 dark:text-gray-700 text-lg">○</span>
-                  ) : (
-                    <div className="w-4 h-4 border-2 border-gray-200 dark:border-gray-700 rounded-full" />
-                  )}
-                </div>
-  
-                {/* Doc icon + label */}
-                <span className="text-base">{doc.icon}</span>
-                <span className={`text-sm font-medium ${isDone ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-600'}`}>
-                  {doc.label}
-                </span>
-  
-                {/* Generating spinner for in-progress */}
-                {!isDone && !jobError && completedCount > 0 && (
-                  <svg className="ml-auto w-3 h-3 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                  </svg>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    )
-  }
+      )}
+    </div>
+  );
+}

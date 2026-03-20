@@ -1,92 +1,160 @@
-import { useState } from 'react'
-import DocTab from './DocTab'
-import ExportButtons from './ExportButtons'
+import { useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { AnimatePresence, motion } from 'framer-motion';
+import DocTab from './DocTab';
+import MermaidDiagram from './MermaidDiagram';
+import ExportButtons from './ExportButtons';
 
-const DOC_TABS = [
-  { type: 'OVERVIEW',     label: 'Overview',     icon: '📋' },
-  { type: 'SPEC',         label: 'Spec',         icon: '🔧' },
-  { type: 'ARCHITECTURE', label: 'Architecture', icon: '🏗️' },
-  { type: 'TECHSTACK',    label: 'Tech Stack',   icon: '⚙️' },
-  { type: 'DATABASE',     label: 'Database',     icon: '🗄️' },
-  { type: 'API',          label: 'API',          icon: '🔌' },
-  { type: 'SETUP',        label: 'Setup',        icon: '💻' },
-  { type: 'DEPLOYMENT',   label: 'Deployment',   icon: '🚀' },
-]
+const DOC_ORDER = [
+  'OVERVIEW', 'SPEC', 'ARCHITECTURE', 'TECHSTACK',
+  'DATABASE', 'API', 'SETUP', 'DEPLOYMENT',
+];
 
-export default function DocViewer({ documents, repoName, jobId }) {
-  const [activeTab, setActiveTab] = useState('OVERVIEW')
+const DOC_LABELS = {
+  OVERVIEW:     'Overview',
+  SPEC:         'Spec',
+  ARCHITECTURE: 'Architecture',
+  TECHSTACK:    'Tech Stack',
+  DATABASE:     'Database',
+  API:          'API Ref',
+  SETUP:        'Setup',
+  DEPLOYMENT:   'Deploy',
+};
 
-  const docMap = {}
-  documents.forEach((doc) => {
-    docMap[doc.type] = doc.content
-  })
+const MERMAID_TYPES = new Set(['ARCHITECTURE', 'DATABASE']);
 
-  const activeContent = docMap[activeTab]
+/* Split mermaid code blocks from markdown */
+function splitContent(content, hasMermaid) {
+  if (!hasMermaid) return { mermaidCode: null, markdownBody: content };
+  const match = content.match(/```mermaid\n([\s\S]+?)```/);
+  return {
+    mermaidCode: match?.[1]?.trim() ?? null,
+    markdownBody: match ? content.replace(/```mermaid\n[\s\S]+?```/, '') : content,
+  };
+}
+
+/* Code block renderer for react-markdown */
+function CodeBlock({ node, inline, className, children, ...props }) {
+  const lang = /language-(\w+)/.exec(className || '')?.[1];
+  if (!inline && lang) {
+    return (
+      <SyntaxHighlighter
+        style={vscDarkPlus}
+        language={lang}
+        PreTag="div"
+        customStyle={{
+          background: 'var(--bg-elevated)',
+          border: '1px solid var(--border)',
+          borderRadius: '8px',
+          fontSize: '12px',
+          fontFamily: '"DM Mono", monospace',
+          margin: '0',
+        }}
+        codeTagProps={{ style: { fontFamily: '"DM Mono", monospace' } }}
+        {...props}
+      >
+        {String(children).replace(/\n$/, '')}
+      </SyntaxHighlighter>
+    );
+  }
+  return (
+    <code className={className} {...props}>
+      {children}
+    </code>
+  );
+}
+
+export default function DocViewer({ docs, activeTab, setActiveTab, jobId, isDone }) {
+  const scrollRef   = useRef(null);
+  const availTabs   = DOC_ORDER.filter((t) => docs[t]);
+  const content     = activeTab ? docs[activeTab] : null;
+  const hasMermaid  = MERMAID_TYPES.has(activeTab);
+
+  const { mermaidCode, markdownBody } = content
+    ? splitContent(content, hasMermaid)
+    : { mermaidCode: null, markdownBody: '' };
+
+  /* Scroll to top on tab change */
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [activeTab]);
+
+  if (!availTabs.length) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-
-      {/* Sticky tab bar */}
-      <div className="sticky top-0 z-20 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4">
-
-          {/* Repo name + export buttons */}
-          <div className="flex items-center justify-between py-3 border-b border-gray-100 dark:border-gray-800">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-lg shrink-0">🔍</span>
-              <span className="font-semibold text-gray-900 dark:text-white text-sm truncate">
-                {repoName}
-              </span>
-              <span className="shrink-0 text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full">
-                {documents.length} docs
-              </span>
-            </div>
-
-            <ExportButtons jobId={jobId} />
-          </div>
-
-          {/* Tab row */}
-          <div className="flex overflow-x-auto gap-1 py-2 scrollbar-hide">
-            {DOC_TABS.map((tab) => {
-              const isAvailable = !!docMap[tab.type]
-              const isActive = activeTab === tab.type
-
-              return (
-                <button
-                  key={tab.type}
-                  onClick={() => isAvailable && setActiveTab(tab.type)}
-                  disabled={!isAvailable}
-                  className={`
-                    flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium
-                    whitespace-nowrap transition-colors
-                    ${isActive
-                      ? 'bg-blue-600 text-white'
-                      : isAvailable
-                      ? 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                      : 'text-gray-300 dark:text-gray-700 cursor-not-allowed'
-                    }
-                  `}
-                >
-                  <span>{tab.icon}</span>
-                  <span>{tab.label}</span>
-                </button>
-              )
-            })}
-          </div>
+    <div
+      style={{
+        flex: 1, minWidth: 0, height: '100%',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}
+    >
+      {/* Tab bar */}
+      <div
+        style={{
+          display: 'flex', alignItems: 'center',
+          padding: '0 8px',
+          background: 'var(--bg-sidebar)',
+          borderBottom: '1px solid var(--border)',
+          overflowX: 'auto',
+          flexShrink: 0,
+          minHeight: '44px',
+        }}
+      >
+        <div style={{ display: 'flex', flex: 1, alignItems: 'center', overflowX: 'auto' }}>
+          {availTabs.map((type) => (
+            <DocTab
+              key={type}
+              type={type}
+              label={DOC_LABELS[type]}
+              isActive={activeTab === type}
+              onClick={() => setActiveTab(type)}
+            />
+          ))}
         </div>
-      </div>
 
-      {/* Document content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        {activeContent ? (
-          <DocTab content={activeContent} />
-        ) : (
-          <div className="text-center py-16 text-gray-400 dark:text-gray-600">
-            <p className="text-4xl mb-3">📄</p>
-            <p>This document was not generated.</p>
+        {isDone && (
+          <div style={{ marginLeft: '12px', flexShrink: 0, paddingRight: '4px' }}>
+            <ExportButtons jobId={jobId} />
           </div>
         )}
       </div>
+
+      {/* Content area */}
+      <div
+        ref={scrollRef}
+        style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}
+      >
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            style={{ maxWidth: '760px', margin: '0 auto', padding: '36px 32px 64px' }}
+          >
+            {/* Mermaid diagram */}
+            {hasMermaid && mermaidCode && (
+              <div style={{ marginBottom: '32px' }}>
+                <MermaidDiagram code={mermaidCode} />
+              </div>
+            )}
+
+            {/* Markdown */}
+            <div className="prose">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{ code: CodeBlock }}
+              >
+                {markdownBody}
+              </ReactMarkdown>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </div>
-  )
+  );
 }

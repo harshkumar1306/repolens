@@ -1,78 +1,135 @@
-import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../hooks/useAuth'
+import { motion } from 'framer-motion';
+import { Github, ArrowRight, Zap } from 'lucide-react';
+
+// ─── HARDCODED — no env var. OAuth MUST go directly to the Render backend.
+// Vercel proxy intercepts redirects; VITE_SOCKET_URL resolves to localhost in dev.
+// This constant is the same in every environment. Do not change it.
+const GITHUB_AUTH_URL = 'https://repolens-backend-awkk.onrender.com/auth/github';
+
+const FEATURES = [
+  'Architecture diagrams',
+  'Full API reference',
+  'Setup & deploy guides',
+  'Database schema maps',
+];
 
 export default function Login() {
-  const { user, loading } = useAuth()
-  const navigate = useNavigate()
-
-  // If already logged in, redirect to home
-  useEffect(() => {
-    if (!loading && user) {
-      navigate('/')
-    }
-  }, [user, loading, navigate])
-
-  const handleLogin = () => {
-    // Redirect to backend OAuth flow
-    window.location.href = `${import.meta.env.VITE_API_URL}/auth/github`
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
-        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
-      </div>
-    )
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center px-4">
-      <div className="max-w-md w-full">
+    <div
+      style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', position: 'relative', overflow: 'hidden',
+        background: 'var(--bg)',
+      }}
+    >
+      <div style={{
+        position: 'absolute', top: '-160px', left: '-160px',
+        width: '500px', height: '500px', borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(228,91,17,0.18) 0%, transparent 70%)',
+        pointerEvents: 'none',
+      }} />
+      <div style={{
+        position: 'absolute', bottom: '-120px', right: '-120px',
+        width: '400px', height: '400px', borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(248,171,11,0.10) 0%, transparent 70%)',
+        pointerEvents: 'none',
+      }} />
 
-        {/* Logo + title */}
-        <div className="text-center mb-8">
-          <div className="text-5xl mb-4">🔍</div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            RepoLens
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            AI-powered documentation for any GitHub repository
-          </p>
-        </div>
-
-        {/* Login card */}
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-8">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-            Get started
-          </h2>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
-            Sign in with GitHub to generate documentation for any public repository.
-          </p>
-
-          <button
-            onClick={handleLogin}
-            className="w-full flex items-center justify-center gap-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-semibold py-3 px-6 rounded-xl hover:bg-gray-700 dark:hover:bg-gray-100 transition-colors"
-          >
-            {/* GitHub icon */}
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z" />
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
+        style={{
+          position: 'relative', zIndex: 1,
+          maxWidth: '400px', width: '100%', padding: '0 20px', textAlign: 'center',
+        }}
+      >
+        {/* Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '36px' }}>
+          <div style={{
+            width: '44px', height: '44px', borderRadius: '14px',
+            background: 'linear-gradient(135deg, #E45B11 0%, #F8AB0B 100%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 0 30px rgba(228,91,17,0.35)',
+          }}>
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <circle cx="10" cy="10" r="7.5" stroke="white" strokeWidth="2.2"/>
+              <line x1="15.5" y1="15.5" x2="20" y2="20" stroke="white" strokeWidth="2.2" strokeLinecap="round"/>
             </svg>
-            Continue with GitHub
-          </button>
-
-          {/* Show error if OAuth failed */}
-          {new URLSearchParams(window.location.search).get('error') && (
-            <p className="mt-4 text-sm text-red-500 text-center">
-              Login failed. Please try again.
-            </p>
-          )}
+          </div>
+          <span style={{
+            fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: '24px',
+            color: 'var(--text-primary)', letterSpacing: '-0.03em',
+          }}>
+            RepoLens
+          </span>
         </div>
 
-        <p className="text-center text-xs text-gray-400 dark:text-gray-600 mt-6">
-          Only public repositories are analyzed. No code is stored.
+        <h1 style={{
+          fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: '30px',
+          lineHeight: 1.2, letterSpacing: '-0.03em',
+          color: 'var(--text-primary)', marginBottom: '12px',
+        }}>
+          Understand any codebase{' '}
+          <span style={{
+            background: 'linear-gradient(90deg, #E45B11, #F8AB0B)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+          }}>
+            instantly.
+          </span>
+        </h1>
+
+        <p style={{
+          fontSize: '14px', lineHeight: 1.65, color: 'var(--text-secondary)',
+          marginBottom: '28px',
+        }}>
+          Paste a GitHub URL and get full AI documentation — architecture diagrams,
+          API references, and more — in under a minute.
         </p>
-      </div>
+
+        <div style={{
+          display: 'flex', flexWrap: 'wrap', gap: '8px',
+          justifyContent: 'center', marginBottom: '32px',
+        }}>
+          {FEATURES.map((f) => (
+            <span key={f} style={{
+              display: 'flex', alignItems: 'center', gap: '5px',
+              padding: '5px 10px', borderRadius: '20px',
+              background: 'var(--bg-surface)', border: '1px solid var(--border)',
+              fontFamily: '"DM Mono", monospace', fontSize: '11px',
+              color: 'var(--text-secondary)',
+            }}>
+              <Zap size={10} style={{ color: 'var(--accent-amber)' }} />
+              {f}
+            </span>
+          ))}
+        </div>
+
+        <motion.a
+          href={GITHUB_AUTH_URL}
+          whileHover={{ scale: 1.01, boxShadow: '0 0 28px rgba(228,91,17,0.22)' }}
+          whileTap={{ scale: 0.99 }}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            gap: '10px', padding: '14px 24px', borderRadius: '12px',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-hover)',
+            color: 'var(--text-primary)', textDecoration: 'none',
+            fontFamily: '"DM Mono", monospace', fontSize: '13px', fontWeight: 500,
+          }}
+        >
+          <Github size={18} />
+          Continue with GitHub
+          <ArrowRight size={14} style={{ marginLeft: 'auto', color: 'var(--text-muted)' }} />
+        </motion.a>
+
+        <p style={{
+          marginTop: '18px', fontFamily: '"DM Mono", monospace',
+          fontSize: '11px', color: 'var(--text-muted)',
+        }}>
+          Read-only access. Your code is never stored.
+        </p>
+      </motion.div>
     </div>
-  )
+  );
 }
