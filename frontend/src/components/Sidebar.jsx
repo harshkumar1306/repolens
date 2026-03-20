@@ -1,6 +1,6 @@
 import { useContext, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Clock, Plus, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { LayoutDashboard, Clock, Plus, LogOut, PanelLeftOpen, PanelLeftClose } from 'lucide-react';
 import { AppContext } from '../App';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -13,52 +13,47 @@ function LensIcon({ size = 16 }) {
   );
 }
 
-const navItems = [
+const NAV_ITEMS = [
   { to: '/',        end: true,  label: 'Dashboard', Icon: LayoutDashboard },
   { to: '/history', end: false, label: 'History',   Icon: Clock },
 ];
 
-/* CSS-driven NavLink — no JS hover handlers so active state can't get stuck */
-function NavItem({ to, end, label, Icon }) {
+/* ─── Inner content (used in both desktop + mobile) ─────────────── */
+function SidebarInner({ user, onNewAnalysis, onLogout, sidebarSlot }) {
   return (
-    <NavLink to={to} end={end} className="sidebar-nav-item">
-      <Icon size={15} />
-      <span>{label}</span>
-    </NavLink>
-  );
-}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
-/* ─── Sidebar inner content ─────────────────────────────────────── */
-function SidebarInner({ user, onNewAnalysis, onLogout, sidebarSlot, collapsed }) {
-  return (
-    <div className="flex flex-col h-full overflow-hidden">
-
-      {/* New Analysis — hidden when slot is active (results page owns the CTA) */}
+      {/* New Analysis — hidden when results slot is active */}
       {!sidebarSlot && (
-        <div className="px-3 mb-3 mt-1">
+        <div style={{ padding: '4px 12px 10px' }}>
           <button
             onClick={onNewAnalysis}
-            className="sidebar-new-btn w-full flex items-center justify-between px-3 py-2 rounded-lg"
+            className="sidebar-new-btn"
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center',
+              justifyContent: 'space-between', padding: '8px 12px', borderRadius: 8,
+            }}
           >
-            <div className="flex items-center gap-2">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Plus size={13} />
-              {!collapsed && <span>New Analysis</span>}
+              <span>New Analysis</span>
             </div>
-            {!collapsed && (
-              <kbd className="sidebar-kbd">⌘</kbd>
-            )}
+            <kbd className="sidebar-kbd">⌘</kbd>
           </button>
         </div>
       )}
 
-      {/* Slot OR default nav */}
-      <div className="flex-1 overflow-y-auto px-3">
+      {/* Nav or slot */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 10px' }}>
         {sidebarSlot ? (
           sidebarSlot
         ) : (
-          <nav className="space-y-0.5">
-            {navItems.map((item) => (
-              <NavItem key={item.to} {...item} />
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {NAV_ITEMS.map(({ to, end, label, Icon }) => (
+              <NavLink key={to} to={to} end={end} className="sidebar-nav-item">
+                <Icon size={15} style={{ flexShrink: 0 }} />
+                <span>{label}</span>
+              </NavLink>
             ))}
           </nav>
         )}
@@ -66,42 +61,51 @@ function SidebarInner({ user, onNewAnalysis, onLogout, sidebarSlot, collapsed })
 
       {/* User row */}
       {!sidebarSlot && (
-        <div className="p-3 mt-auto shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
-          <div className="flex items-center gap-2.5 px-1">
-            {user?.avatarUrl ? (
-              <img
-                src={user.avatarUrl}
-                alt={user.username || 'avatar'}
-                className="w-7 h-7 rounded-full shrink-0"
-                style={{ border: '1.5px solid var(--border-hover)' }}
-              />
-            ) : (
-              <div
-                className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center"
-                style={{
-                  background: 'linear-gradient(135deg,#E45B11,#F8AB0B)',
-                  fontSize: 11, color: 'white', fontFamily: '"DM Mono",monospace',
-                }}
-              >
-                {(user?.username || '?')[0].toUpperCase()}
-              </div>
-            )}
-            {!collapsed && (
-              <span
-                className="flex-1 truncate"
-                style={{ fontFamily: '"DM Mono",monospace', fontSize: 12, color: 'var(--text-secondary)' }}
-              >
-                {user?.username || 'user'}
-              </span>
-            )}
-            <button
-              onClick={onLogout}
-              title="Sign out"
-              className="sidebar-icon-btn"
-            >
-              <LogOut size={13} />
-            </button>
-          </div>
+        <div style={{
+          padding: '10px 12px',
+          borderTop: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
+        }}>
+          {/* Avatar */}
+          {user?.avatarUrl ? (
+            <img
+              src={user.avatarUrl}
+              alt={user.username}
+              style={{
+                width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                border: '1.5px solid var(--border-hover)',
+                objectFit: 'cover',
+              }}
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+          ) : (
+            <div style={{
+              width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+              background: 'linear-gradient(135deg,#E45B11,#F8AB0B)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: '"DM Mono",monospace', fontSize: 11, color: 'white', fontWeight: 600,
+            }}>
+              {(user?.username || 'U')[0].toUpperCase()}
+            </div>
+          )}
+
+          <span style={{
+            flex: 1, minWidth: 0,
+            fontFamily: '"DM Mono",monospace', fontSize: 12,
+            color: 'var(--text-secondary)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {user?.username || 'user'}
+          </span>
+
+          <button
+            onClick={onLogout}
+            title="Sign out"
+            className="sidebar-icon-btn"
+            style={{ flexShrink: 0 }}
+          >
+            <LogOut size={13} />
+          </button>
         </div>
       )}
     </div>
@@ -110,9 +114,13 @@ function SidebarInner({ user, onNewAnalysis, onLogout, sidebarSlot, collapsed })
 
 /* ─── Main export ─────────────────────────────────────────────────── */
 export default function Sidebar() {
-  const { user, logout, setPaletteOpen, sidebarCollapsed, setSidebarCollapsed, sidebarSlot } =
-    useContext(AppContext);
-  const navigate = useNavigate();
+  const {
+    user, logout,
+    setPaletteOpen,
+    sidebarCollapsed, setSidebarCollapsed,
+    sidebarSlot,
+  } = useContext(AppContext);
+  const navigate    = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogout = async () => {
@@ -120,61 +128,50 @@ export default function Sidebar() {
     navigate('/login');
   };
 
-  const SIDEBAR_W = sidebarCollapsed ? 52 : 224;
-
   return (
     <>
-      {/* ── Desktop sidebar ─────────────────────────────── */}
+      {/* ── Desktop sidebar ──────────────────────────────────────── */}
       <motion.aside
-        animate={{ width: SIDEBAR_W }}
-        transition={{ type: 'spring', damping: 28, stiffness: 260 }}
-        className="hidden md:flex flex-col h-full shrink-0 overflow-hidden"
+        animate={{ width: sidebarCollapsed ? 0 : 224 }}
+        transition={{ type: 'spring', damping: 30, stiffness: 280 }}
         style={{
           background: 'var(--bg-sidebar)',
-          borderRight: '1px solid var(--border)',
+          borderRight: sidebarCollapsed ? 'none' : '1px solid var(--border)',
+          height: '100%',
+          overflow: 'hidden',
+          flexShrink: 0,
+          display: 'none',
         }}
+        className="md:block"
       >
-        {/* Logo row + toggle */}
-        <div
-          className="flex items-center shrink-0 px-3 pt-4 pb-3"
-          style={{ minHeight: 52, gap: sidebarCollapsed ? 0 : 8 }}
-        >
-          <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-            style={{ background: 'linear-gradient(135deg,#E45B11 0%,#F8AB0B 100%)' }}
-          >
+        {/* Logo row */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '14px 12px 8px', minWidth: 224, // prevent reflow during animation
+        }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+            background: 'linear-gradient(135deg,#E45B11 0%,#F8AB0B 100%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
             <LensIcon size={15} />
           </div>
+          <span style={{
+            fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: 15,
+            color: 'var(--text-primary)', letterSpacing: '-0.02em',
+            whiteSpace: 'nowrap',
+          }}>
+            RepoLens
+          </span>
 
-          <AnimatePresence>
-            {!sidebarCollapsed && (
-              <motion.span
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: 'auto' }}
-                exit={{ opacity: 0, width: 0 }}
-                transition={{ duration: 0.18 }}
-                style={{
-                  fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: 15,
-                  color: 'var(--text-primary)', letterSpacing: '-0.02em',
-                  overflow: 'hidden', whiteSpace: 'nowrap',
-                }}
-              >
-                RepoLens
-              </motion.span>
-            )}
-          </AnimatePresence>
-
-          {/* Toggle button — always visible, pushes to right when expanded */}
+          {/* Collapse toggle */}
           <button
-            onClick={() => setSidebarCollapsed((c) => !c)}
-            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="sidebar-icon-btn ml-auto"
-            style={{ flexShrink: 0 }}
+            onClick={() => setSidebarCollapsed(true)}
+            title="Collapse sidebar"
+            className="sidebar-icon-btn"
+            style={{ marginLeft: 'auto', flexShrink: 0 }}
           >
-            {sidebarCollapsed
-              ? <PanelLeftOpen  size={14} />
-              : <PanelLeftClose size={14} />
-            }
+            <PanelLeftClose size={14} />
           </button>
         </div>
 
@@ -182,21 +179,55 @@ export default function Sidebar() {
           user={user}
           onNewAnalysis={() => setPaletteOpen(true)}
           onLogout={handleLogout}
-          sidebarSlot={sidebarCollapsed ? null : sidebarSlot}
-          collapsed={sidebarCollapsed}
+          sidebarSlot={sidebarSlot}
         />
       </motion.aside>
 
-      {/* ── Mobile top bar ───────────────────────────────── */}
+      {/* ── Floating expand button (visible when collapsed) ──────── */}
+      <AnimatePresence>
+        {sidebarCollapsed && (
+          <motion.button
+            key="expand-btn"
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -8 }}
+            transition={{ duration: 0.18 }}
+            onClick={() => setSidebarCollapsed(false)}
+            title="Expand sidebar"
+            style={{
+              position: 'absolute',
+              top: 10,
+              left: 8,
+              zIndex: 20,
+              padding: 7,
+              borderRadius: 8,
+              background: 'var(--bg-sidebar)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              transition: 'color 0.15s, border-color 0.15s',
+              display: 'none',
+            }}
+            className="md:flex items-center justify-center"
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+          >
+            <PanelLeftOpen size={14} />
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* ── Mobile top bar ───────────────────────────────────────── */}
       <div
-        className="md:hidden flex items-center justify-between px-4 py-3 absolute top-0 left-0 right-0 z-30 shrink-0"
+        className="md:hidden flex items-center justify-between px-4 py-3 absolute top-0 left-0 right-0 z-30"
         style={{ background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--border)' }}
       >
         <div className="flex items-center gap-2">
-          <div
-            className="w-6 h-6 rounded-md flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg,#E45B11,#F8AB0B)' }}
-          >
+          <div style={{
+            width: 24, height: 24, borderRadius: 7, flexShrink: 0,
+            background: 'linear-gradient(135deg,#E45B11,#F8AB0B)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
             <LensIcon size={12} />
           </div>
           <span style={{ fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
@@ -205,13 +236,13 @@ export default function Sidebar() {
         </div>
         <button
           onClick={() => setMobileOpen(true)}
-          style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
+          className="sidebar-icon-btn"
         >
           <PanelLeftOpen size={18} />
         </button>
       </div>
 
-      {/* ── Mobile drawer ────────────────────────────────── */}
+      {/* ── Mobile drawer ────────────────────────────────────────── */}
       <AnimatePresence>
         {mobileOpen && (
           <>
@@ -223,16 +254,22 @@ export default function Sidebar() {
             />
             <motion.div
               initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="fixed left-0 top-0 bottom-0 z-50 w-56 md:hidden flex flex-col"
-              style={{ background: 'var(--bg-sidebar)', borderRight: '1px solid var(--border)' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+              className="fixed left-0 top-0 bottom-0 z-50 md:hidden"
+              style={{ width: 224, background: 'var(--bg-sidebar)', borderRight: '1px solid var(--border)' }}
             >
-              <div className="flex items-center gap-2.5 px-3 pt-4 pb-3">
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#E45B11,#F8AB0B)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 12px 8px' }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: 8,
+                  background: 'linear-gradient(135deg,#E45B11,#F8AB0B)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
                   <LensIcon size={15} />
                 </div>
-                <span style={{ fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: 15, color: 'var(--text-primary)' }}>RepoLens</span>
-                <button onClick={() => setMobileOpen(false)} className="sidebar-icon-btn ml-auto">
+                <span style={{ fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: 15, color: 'var(--text-primary)' }}>
+                  RepoLens
+                </span>
+                <button onClick={() => setMobileOpen(false)} className="sidebar-icon-btn" style={{ marginLeft: 'auto' }}>
                   <PanelLeftClose size={14} />
                 </button>
               </div>
@@ -241,7 +278,6 @@ export default function Sidebar() {
                 onNewAnalysis={() => { setPaletteOpen(true); setMobileOpen(false); }}
                 onLogout={handleLogout}
                 sidebarSlot={sidebarSlot}
-                collapsed={false}
               />
             </motion.div>
           </>

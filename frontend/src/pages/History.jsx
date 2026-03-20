@@ -7,13 +7,22 @@ import api from '../lib/api';
 export default function History() {
   const [jobs,    setJobs]    = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState(null);
   const [search,  setSearch]  = useState('');
 
   useEffect(() => {
     api
       .get('/api/jobs')
-      .then((res) => setJobs(res.data))
-      .catch(() => {})
+      .then((res) => {
+        // Backend might return array directly OR { jobs: [...] }
+        const data = Array.isArray(res.data)
+          ? res.data
+          : (res.data?.jobs || res.data?.data || []);
+        setJobs(data);
+      })
+      .catch((err) => {
+        setError(err.response?.data?.message || 'Failed to load history');
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -28,85 +37,74 @@ export default function History() {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Header */}
-      <div
-        style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '16px 28px', flexShrink: 0,
-          background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--border)',
-        }}
-      >
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '14px 24px', flexShrink: 0,
+        background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--border)',
+      }}>
         <div>
-          <h2 style={{
-            fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '16px',
-            color: 'var(--text-primary)',
-          }}>
+          <h2 style={{ fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>
             Analysis History
           </h2>
-          <p style={{
-            fontFamily: '"DM Mono", monospace', fontSize: '11px',
-            color: 'var(--text-muted)', marginTop: '2px',
-          }}>
+          <p style={{ fontFamily: '"DM Mono",monospace', fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
             {jobs.length} {jobs.length === 1 ? 'repository' : 'repositories'} analyzed
           </p>
         </div>
 
-        {/* Search */}
         <div style={{
-          display: 'flex', alignItems: 'center', gap: '8px',
-          padding: '8px 12px', borderRadius: '9px',
-          background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-          width: '220px',
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '7px 12px', borderRadius: 9,
+          background: 'var(--bg-elevated)', border: '1px solid var(--border)', width: 210,
         }}>
-          <Search size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          <Search size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search repos…"
             style={{
               flex: 1, background: 'transparent', border: 'none', outline: 'none',
-              fontFamily: '"DM Mono", monospace', fontSize: '12px',
-              color: 'var(--text-primary)',
+              fontFamily: '"DM Mono",monospace', fontSize: 12, color: 'var(--text-primary)',
             }}
           />
         </div>
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
         {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '160px' }}>
-            <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 160 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
               {['#E45B11', '#F4860D', '#F8AB0B'].map((c, i) => (
                 <motion.span
                   key={i}
-                  style={{ display: 'block', width: '6px', height: '6px', borderRadius: '50%', background: c }}
+                  style={{ display: 'block', width: 6, height: 6, borderRadius: '50%', background: c }}
                   animate={{ y: [0, -8, 0] }}
                   transition={{ duration: 0.7, delay: i * 0.14, repeat: Infinity }}
                 />
               ))}
             </div>
           </div>
+        ) : error ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 220, textAlign: 'center' }}>
+            <p style={{ fontFamily: '"DM Mono",monospace', fontSize: 12, color: '#E45B11', marginBottom: 6 }}>
+              {error}
+            </p>
+            <p style={{ fontFamily: '"DM Mono",monospace', fontSize: 11, color: 'var(--text-muted)' }}>
+              Make sure you are logged in
+            </p>
+          </div>
         ) : filtered.length === 0 ? (
-          <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', height: '220px', textAlign: 'center',
-          }}>
-            <Package size={36} style={{ color: 'var(--text-muted)', marginBottom: '14px' }} />
-            <p style={{
-              fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '15px',
-              color: 'var(--text-secondary)', marginBottom: '6px',
-            }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 220, textAlign: 'center' }}>
+            <Package size={36} style={{ color: 'var(--text-muted)', marginBottom: 14 }} />
+            <p style={{ fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 15, color: 'var(--text-secondary)', marginBottom: 6 }}>
               {search ? 'No matching repos' : 'No analyses yet'}
             </p>
-            <p style={{
-              fontFamily: '"DM Mono", monospace', fontSize: '12px',
-              color: 'var(--text-muted)',
-            }}>
-              {search ? 'Try a different search' : 'Press ⌘K to analyze your first repo'}
+            <p style={{ fontFamily: '"DM Mono",monospace', fontSize: 12, color: 'var(--text-muted)' }}>
+              {search ? 'Try a different search' : 'Press ⌘ to analyze your first repo'}
             </p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '680px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 680 }}>
             {filtered.map((job, i) => (
               <HistoryCard key={job.id} job={job} index={i} />
             ))}

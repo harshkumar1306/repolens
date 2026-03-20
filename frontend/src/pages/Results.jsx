@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useContext } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useCallback, useContext, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowLeft, CheckCircle, Loader2, Circle, Clock,
-  ExternalLink, XCircle, FileText, Download,
+  LayoutDashboard, CheckCircle, Loader2, Circle,
+  Clock, ExternalLink, XCircle,
 } from 'lucide-react';
 import api from '../lib/api';
 import { useSocket } from '../hooks/useSocket';
@@ -11,29 +11,29 @@ import { AppContext } from '../App';
 import DocViewer from '../components/DocViewer';
 import PdfModal from '../components/PdfModal';
 
-/* ─── Constants ──────────────────────────────────────────────────────── */
+/* ─── Constants ─────────────────────────────────────────────────── */
 const DOC_ORDER = [
-  'OVERVIEW', 'SPEC', 'ARCHITECTURE', 'TECHSTACK',
-  'DATABASE', 'API', 'SETUP', 'DEPLOYMENT',
+  'OVERVIEW','SPEC','ARCHITECTURE','TECHSTACK',
+  'DATABASE','API','SETUP','DEPLOYMENT',
 ];
 
 const DOC_META = {
-  OVERVIEW:     { label: 'Project Overview',     icon: '◆' },
-  SPEC:         { label: 'Reverse Eng. Spec',     icon: '◈' },
-  ARCHITECTURE: { label: 'Architecture',          icon: '⬡' },
-  TECHSTACK:    { label: 'Tech Stack',            icon: '◉' },
-  DATABASE:     { label: 'Database Schema',       icon: '◫' },
-  API:          { label: 'API Reference',         icon: '⬖' },
-  SETUP:        { label: 'Setup Guide',           icon: '◔' },
-  DEPLOYMENT:   { label: 'Deployment Guide',      icon: '◐' },
+  OVERVIEW:     { label: 'Project Overview',    icon: '◆' },
+  SPEC:         { label: 'Reverse Eng. Spec',    icon: '◈' },
+  ARCHITECTURE: { label: 'Architecture',         icon: '⬡' },
+  TECHSTACK:    { label: 'Tech Stack',           icon: '◉' },
+  DATABASE:     { label: 'Database Schema',      icon: '◫' },
+  API:          { label: 'API Reference',        icon: '⬖' },
+  SETUP:        { label: 'Setup Guide',          icon: '◔' },
+  DEPLOYMENT:   { label: 'Deployment Guide',     icon: '◐' },
 };
 
-/* ─── Waiting animation ──────────────────────────────────────────────── */
+/* ─── Waiting dots ──────────────────────────────────────────────── */
 function WaitingDots({ message }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
       <div style={{ display: 'flex', gap: 8 }}>
-        {['#E45B11', '#F4860D', '#F8AB0B'].map((color, i) => (
+        {['#E45B11','#F4860D','#F8AB0B'].map((color, i) => (
           <motion.span
             key={i}
             style={{ display: 'block', width: 8, height: 8, borderRadius: '50%', background: color }}
@@ -51,41 +51,40 @@ function WaitingDots({ message }) {
   );
 }
 
-/* ─── Sidebar slot: GENERATING state ────────────────────────────────── */
-function GeneratingSidebar({ completedTypes, progressMsg, rateLimitMsg, repoName, onBack, onCancel }) {
-  const progress = completedTypes.length / DOC_ORDER.length;
+/* ─── Generating sidebar slot ───────────────────────────────────── */
+function GeneratingSidebar({ completedTypes, progressMsg, rateLimitMsg, repoName, onCancel }) {
+  const progress   = completedTypes.length / DOC_ORDER.length;
   const currentIdx = DOC_ORDER.findIndex((t) => !completedTypes.includes(t));
-  const done = new Set(completedTypes);
+  const done       = new Set(completedTypes);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', paddingTop: 4 }}>
-      {/* Back */}
-      <button
-        onClick={onBack}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 7,
-          padding: '7px 10px', borderRadius: 8, border: 'none',
-          background: 'transparent', color: 'var(--text-muted)',
-          fontFamily: '"DM Mono",monospace', fontSize: 11,
-          cursor: 'pointer', marginBottom: 14, width: '100%', textAlign: 'left',
-          transition: 'all 0.15s',
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.color='var(--text-secondary)'; e.currentTarget.style.background='var(--bg-elevated)'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.color='var(--text-muted)'; e.currentTarget.style.background='transparent'; }}
-      >
-        <ArrowLeft size={12} />
-        {repoName || 'Back'}
-      </button>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Repo label */}
+      {repoName && (
+        <div style={{ marginBottom: 14 }}>
+          <p style={{ fontFamily: '"DM Mono",monospace', fontSize: 11, color: 'var(--text-muted)', padding: '0 2px' }}>
+            Analyzing
+          </p>
+          <p style={{
+            fontFamily: '"DM Mono",monospace', fontSize: 12, color: 'var(--text-secondary)',
+            marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {repoName}
+          </p>
+        </div>
+      )}
 
-      {/* Progress header */}
+      {/* Progress */}
       <div style={{ marginBottom: 14 }}>
-        <p style={{ fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 12, color: 'var(--text-primary)', marginBottom: 2 }}>
-          Generating
-        </p>
-        <p style={{ fontFamily: '"DM Mono",monospace', fontSize: 11, color: 'var(--text-muted)' }}>
-          {completedTypes.length} / {DOC_ORDER.length} docs
-        </p>
-        <div style={{ marginTop: 8, height: 3, borderRadius: 2, background: 'var(--bg-elevated)', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+          <p style={{ fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 12, color: 'var(--text-primary)' }}>
+            Generating
+          </p>
+          <p style={{ fontFamily: '"DM Mono",monospace', fontSize: 11, color: 'var(--text-muted)' }}>
+            {completedTypes.length}/{DOC_ORDER.length}
+          </p>
+        </div>
+        <div style={{ height: 3, borderRadius: 2, background: 'var(--bg-elevated)', overflow: 'hidden' }}>
           <motion.div
             style={{ height: '100%', borderRadius: 2, background: 'linear-gradient(90deg,#E45B11,#F8AB0B)' }}
             initial={{ width: 0 }}
@@ -100,19 +99,12 @@ function GeneratingSidebar({ completedTypes, progressMsg, rateLimitMsg, repoName
         {DOC_ORDER.map((type, i) => {
           const isDone    = done.has(type);
           const isCurrent = !isDone && i === currentIdx;
-          const meta      = DOC_META[type];
           return (
-            <motion.div
-              key={type}
-              initial={{ opacity: 0, x: -4 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.04 }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 9,
-                padding: '6px 8px', borderRadius: 7,
-                background: isCurrent ? 'rgba(228,91,17,0.08)' : 'transparent',
-              }}
-            >
+            <div key={type} style={{
+              display: 'flex', alignItems: 'center', gap: 9,
+              padding: '6px 8px', borderRadius: 7,
+              background: isCurrent ? 'rgba(228,91,17,0.08)' : 'transparent',
+            }}>
               {isDone
                 ? <CheckCircle size={13} style={{ color: '#F8AB0B', flexShrink: 0 }} />
                 : isCurrent
@@ -124,14 +116,14 @@ function GeneratingSidebar({ completedTypes, progressMsg, rateLimitMsg, repoName
                 color: isDone ? 'var(--text-secondary)' : isCurrent ? 'var(--text-primary)' : 'var(--text-muted)',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
-                {meta.label}
+                {DOC_META[type].label}
               </span>
-            </motion.div>
+            </div>
           );
         })}
       </div>
 
-      {/* Status / rate-limit */}
+      {/* Status message */}
       {(progressMsg || rateLimitMsg) && (
         <div style={{
           margin: '10px 0',
@@ -149,19 +141,19 @@ function GeneratingSidebar({ completedTypes, progressMsg, rateLimitMsg, repoName
         </div>
       )}
 
-      {/* Cancel */}
+      {/* Cancel — always at bottom with enough spacing */}
       <button
         onClick={onCancel}
         style={{
           width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-          padding: '8px 12px', borderRadius: 8,
-          border: '1px solid rgba(228,91,17,0.2)',
+          padding: '9px 12px', borderRadius: 8, marginTop: 4,
+          border: '1px solid rgba(228,91,17,0.25)',
           background: 'transparent', color: 'var(--accent)',
           fontFamily: '"DM Mono",monospace', fontSize: 11,
-          cursor: 'pointer', transition: 'all 0.15s',
+          cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0,
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background='rgba(228,91,17,0.08)'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background='transparent'; }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(228,91,17,0.1)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
       >
         <XCircle size={12} />
         Cancel
@@ -170,59 +162,56 @@ function GeneratingSidebar({ completedTypes, progressMsg, rateLimitMsg, repoName
   );
 }
 
-/* ─── Sidebar slot: DONE state ───────────────────────────────────────── */
-function DoneSidebar({ docs, activeTab, setActiveTab, jobId, completedTypes, repoUrl, repoName, onBack }) {
+/* ─── Done sidebar slot ─────────────────────────────────────────── */
+function DoneSidebar({ docs, activeTab, setActiveTab, jobId, completedTypes, repoUrl, repoName, onDashboard }) {
   const [pdfOpen, setPdfOpen] = useState(false);
 
   return (
     <>
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', paddingTop: 4 }}>
-        {/* Back + repo name */}
-        <div style={{ marginBottom: 14 }}>
-          <button
-            onClick={onBack}
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {/* Dashboard button */}
+        <button
+          onClick={onDashboard}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '7px 10px', borderRadius: 8, border: 'none',
+            background: 'transparent', color: 'var(--text-muted)',
+            fontFamily: '"DM Mono",monospace', fontSize: 11,
+            cursor: 'pointer', marginBottom: 10, width: '100%', textAlign: 'left',
+            transition: 'all 0.15s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'transparent'; }}
+        >
+          <LayoutDashboard size={12} />
+          Dashboard
+        </button>
+
+        {/* Repo link */}
+        {repoUrl && (
+          <a
+            href={repoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             style={{
-              display: 'flex', alignItems: 'center', gap: 7,
-              padding: '7px 10px', borderRadius: 8, border: 'none',
-              background: 'transparent', color: 'var(--text-muted)',
-              fontFamily: '"DM Mono",monospace', fontSize: 11,
-              cursor: 'pointer', width: '100%', textAlign: 'left', transition: 'all 0.15s',
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '5px 10px', marginBottom: 10, borderRadius: 7,
+              textDecoration: 'none', fontFamily: '"DM Mono",monospace', fontSize: 11,
+              color: 'var(--text-muted)', transition: 'color 0.15s',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.color='var(--text-secondary)'; e.currentTarget.style.background='var(--bg-elevated)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color='var(--text-muted)'; e.currentTarget.style.background='transparent'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-amber)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; }}
           >
-            <ArrowLeft size={12} />
-            Dashboard
-          </button>
+            <ExternalLink size={11} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{repoName}</span>
+          </a>
+        )}
 
-          {repoUrl && (
-            <a
-              href={repoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '5px 10px', margin: '4px 0 0',
-                borderRadius: 7, textDecoration: 'none',
-                fontFamily: '"DM Mono",monospace', fontSize: 11,
-                color: 'var(--text-muted)', transition: 'all 0.15s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.color='var(--accent-amber)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color='var(--text-muted)'; }}
-            >
-              <ExternalLink size={11} />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {repoName}
-              </span>
-            </a>
-          )}
-        </div>
-
-        {/* Section label */}
+        {/* Docs label */}
         <p style={{
           fontFamily: '"DM Mono",monospace', fontSize: 10,
           letterSpacing: '0.08em', textTransform: 'uppercase',
-          color: 'var(--text-muted)', padding: '0 10px', marginBottom: 6,
+          color: 'var(--text-muted)', padding: '0 4px', marginBottom: 6,
         }}>
           Documents
         </p>
@@ -230,7 +219,6 @@ function DoneSidebar({ docs, activeTab, setActiveTab, jobId, completedTypes, rep
         {/* Doc list */}
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
           {DOC_ORDER.filter((t) => docs[t]).map((type) => {
-            const meta     = DOC_META[type];
             const isActive = activeTab === type;
             return (
               <button
@@ -240,74 +228,63 @@ function DoneSidebar({ docs, activeTab, setActiveTab, jobId, completedTypes, rep
                   display: 'flex', alignItems: 'center', gap: 9,
                   padding: '8px 10px', borderRadius: 8, border: 'none',
                   background: isActive ? 'var(--bg-elevated)' : 'transparent',
-                  borderLeft: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+                  borderLeft: `2px solid ${isActive ? 'var(--accent)' : 'transparent'}`,
                   color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
                   fontFamily: '"DM Mono",monospace', fontSize: 12,
                   cursor: 'pointer', width: '100%', textAlign: 'left', transition: 'all 0.12s',
                 }}
-                onMouseEnter={(e) => { if (!isActive) { e.currentTarget.style.background='rgba(226,228,213,0.04)'; e.currentTarget.style.color='var(--text-primary)'; } }}
-                onMouseLeave={(e) => { if (!isActive) { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='var(--text-secondary)'; } }}
+                onMouseEnter={(e) => { if (!isActive) { e.currentTarget.style.background = 'rgba(226,228,213,0.04)'; e.currentTarget.style.color = 'var(--text-primary)'; } }}
+                onMouseLeave={(e) => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; } }}
               >
                 <span style={{ fontSize: 10, color: isActive ? 'var(--accent)' : 'var(--text-muted)', flexShrink: 0 }}>
-                  {meta.icon}
+                  {DOC_META[type].icon}
                 </span>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {meta.label}
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {DOC_META[type].label}
                 </span>
-                <CheckCircle size={11} style={{ color: '#F8AB0B', marginLeft: 'auto', flexShrink: 0 }} />
+                <CheckCircle size={11} style={{ color: '#F8AB0B', flexShrink: 0 }} />
               </button>
             );
           })}
         </div>
 
-        {/* Export buttons */}
-        <div style={{
-          marginTop: 12, paddingTop: 12,
-          borderTop: '1px solid var(--border)',
-          display: 'flex', flexDirection: 'column', gap: 6,
-        }}>
+        {/* Export */}
+        <div style={{ paddingTop: 12, marginTop: 8, borderTop: '1px solid var(--border)', flexShrink: 0 }}>
           <p style={{
             fontFamily: '"DM Mono",monospace', fontSize: 10,
             letterSpacing: '0.08em', textTransform: 'uppercase',
-            color: 'var(--text-muted)', padding: '0 2px', marginBottom: 2,
+            color: 'var(--text-muted)', marginBottom: 6, padding: '0 2px',
           }}>
             Export
           </p>
           <button
             onClick={() => setPdfOpen(true)}
             style={{
-              display: 'flex', alignItems: 'center', gap: 7,
+              display: 'flex', alignItems: 'center', gap: 8,
               padding: '8px 10px', borderRadius: 8,
-              border: '1px solid var(--border)',
-              background: 'var(--bg-elevated)',
-              color: 'var(--text-secondary)',
-              fontFamily: '"DM Mono",monospace', fontSize: 11,
+              border: '1px solid var(--border)', background: 'var(--bg-elevated)',
+              color: 'var(--text-secondary)', fontFamily: '"DM Mono",monospace', fontSize: 11,
               cursor: 'pointer', width: '100%', transition: 'all 0.15s',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.color='var(--text-primary)'; e.currentTarget.style.borderColor='var(--border-hover)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color='var(--text-secondary)'; e.currentTarget.style.borderColor='var(--border)'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
           >
-            <Download size={12} />
             PDF / ZIP Download
           </button>
         </div>
       </div>
 
       {pdfOpen && (
-        <PdfModal
-          jobId={jobId}
-          completedTypes={completedTypes}
-          onClose={() => setPdfOpen(false)}
-        />
+        <PdfModal jobId={jobId} completedTypes={completedTypes} onClose={() => setPdfOpen(false)} />
       )}
     </>
   );
 }
 
-/* ─── Results page ───────────────────────────────────────────────────── */
+/* ─── Results page ──────────────────────────────────────────────── */
 export default function Results() {
-  const { id }    = useParams();
-  const navigate  = useNavigate();
+  const { id }            = useParams();
+  const navigate          = useNavigate();
   const { setSidebarSlot } = useContext(AppContext);
 
   const [docs,         setDocs]         = useState({});
@@ -318,25 +295,21 @@ export default function Results() {
   const [repoUrl,      setRepoUrl]      = useState('');
   const [repoName,     setRepoName]     = useState('');
 
-  /* Parse owner/repo from URL */
   const parseRepoName = (url) => {
     try {
       const parts = new URL(url).pathname.split('/').filter(Boolean);
       return parts.slice(0, 2).join('/');
-    } catch {
-      return url;
-    }
+    } catch { return url; }
   };
 
-  /* Cancel = navigate away */
-  const handleCancel = () => navigate('/');
-  const handleBack   = () => navigate('/');
+  const handleDashboard = useCallback(() => navigate('/'), [navigate]);
+  const handleCancel    = useCallback(() => navigate('/'), [navigate]);
 
-  /* Load existing job */
+  /* Load job */
   useEffect(() => {
     api.get(`/api/jobs/${id}`)
       .then((res) => {
-        const job = res.data;
+        const job  = res.data?.job || res.data;
         const url  = job.repoUrl || '';
         const name = parseRepoName(url) || job.repoName || 'Repository';
         setRepoUrl(url);
@@ -346,8 +319,7 @@ export default function Results() {
           const map = {};
           job.documents.forEach((d) => { map[d.type] = d.content; });
           setDocs(map);
-          const first = DOC_ORDER.find((t) => map[t]);
-          if (first) setActiveTab(first);
+          setActiveTab((p) => p || DOC_ORDER.find((t) => map[t]));
         }
 
         if      (job.status === 'DONE')   setStatus('done');
@@ -363,17 +335,17 @@ export default function Results() {
     'job:rateLimit':  useCallback(({ message }) => { setRateLimitMsg(message); }, []),
     'job:docComplete': useCallback(({ type, content }) => {
       setRateLimitMsg(null);
-      setDocs((prev) => ({ ...prev, [type]: content }));
-      setActiveTab((prev) => prev || type);
+      setDocs((p) => ({ ...p, [type]: content }));
+      setActiveTab((p) => p || type);
     }, []),
-    'job:done':   useCallback(() => { setStatus('done'); }, []),
+    'job:done':  useCallback(() => { setStatus('done'); }, []),
     'job:cached': useCallback(({ jobId }) => {
       api.get(`/api/jobs/${jobId}`).then((res) => {
+        const job = res.data?.job || res.data;
         const map = {};
-        res.data.documents.forEach((d) => { map[d.type] = d.content; });
+        job.documents.forEach((d) => { map[d.type] = d.content; });
         setDocs(map);
-        const first = DOC_ORDER.find((t) => map[t]);
-        if (first) setActiveTab(first);
+        setActiveTab(DOC_ORDER.find((t) => map[t]));
         setStatus('done');
       });
     }, []),
@@ -386,24 +358,27 @@ export default function Results() {
   const isDone         = status === 'done';
   const completedTypes = DOC_ORDER.filter((t) => docs[t]);
 
-  /* ── Inject sidebar slot ── */
+  /* Inject sidebar slot — use a ref to avoid infinite render loops */
+  const slotVersion = useRef(0);
   useEffect(() => {
+    slotVersion.current += 1;
+    const v = slotVersion.current;
+
     if (isProcessing) {
       setSidebarSlot(
         <GeneratingSidebar
-          key="generating"
+          key={`gen-${v}`}
           completedTypes={completedTypes}
           progressMsg={progressMsg}
           rateLimitMsg={rateLimitMsg}
           repoName={repoName}
-          onBack={handleBack}
           onCancel={handleCancel}
         />
       );
     } else if (isDone) {
       setSidebarSlot(
         <DoneSidebar
-          key="done"
+          key={`done-${v}`}
           docs={docs}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
@@ -411,18 +386,14 @@ export default function Results() {
           completedTypes={completedTypes}
           repoUrl={repoUrl}
           repoName={repoName}
-          onBack={handleBack}
+          onDashboard={handleDashboard}
         />
       );
     }
-    // Cleanup: remove slot when leaving this page
-    return () => {};
-  }, [isProcessing, isDone, completedTypes, progressMsg, rateLimitMsg, docs, activeTab, repoUrl, repoName]);
+  }, [isProcessing, isDone, completedTypes.length, progressMsg, rateLimitMsg, docs, activeTab, repoUrl, repoName]);
 
   /* Remove slot on unmount */
-  useEffect(() => {
-    return () => setSidebarSlot(null);
-  }, []);
+  useEffect(() => () => setSidebarSlot(null), []);
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -432,28 +403,47 @@ export default function Results() {
         padding: '0 16px', flexShrink: 0, minHeight: 44,
         background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--border)',
       }}>
+        {/* Dashboard link */}
+        <button
+          onClick={handleDashboard}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '5px 8px', borderRadius: 7, border: 'none',
+            background: 'transparent', color: 'var(--text-muted)',
+            fontFamily: '"DM Mono",monospace', fontSize: 11,
+            cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0,
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'transparent'; }}
+        >
+          <LayoutDashboard size={13} />
+          Dashboard
+        </button>
+
+        <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>›</span>
+
+        {/* Repo name / link */}
         {repoUrl ? (
-          <>
-            <span style={{ fontFamily: '"DM Mono",monospace', fontSize: 12, color: 'var(--text-muted)' }}>
-              github.com/
-            </span>
-            <a
-              href={repoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 13,
-                color: 'var(--text-primary)', textDecoration: 'none',
-                transition: 'color 0.15s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.color='var(--accent-amber)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color='var(--text-primary)'; }}
-            >
-              {repoName}
-              <ExternalLink size={11} style={{ opacity: 0.6 }} />
-            </a>
-          </>
+          <a
+            href={repoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              fontFamily: '"DM Mono",monospace', fontSize: 12,
+              color: 'var(--text-secondary)', textDecoration: 'none',
+              transition: 'color 0.15s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-amber)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; }}
+          >
+            {repoName}
+            <ExternalLink size={11} style={{ opacity: 0.6 }} />
+          </a>
+        ) : repoName ? (
+          <span style={{ fontFamily: '"DM Mono",monospace', fontSize: 12, color: 'var(--text-secondary)' }}>
+            {repoName}
+          </span>
         ) : (
           <span style={{ fontFamily: '"DM Mono",monospace', fontSize: 12, color: 'var(--text-muted)' }}>
             Loading…
@@ -478,11 +468,10 @@ export default function Results() {
 
       {/* ── Content ── */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {completedTypes.length > 0 ? (
-          <DocViewer docs={docs} activeTab={activeTab} />
-        ) : (
-          <WaitingDots message={progressMsg} />
-        )}
+        {completedTypes.length > 0
+          ? <DocViewer docs={docs} activeTab={activeTab} />
+          : <WaitingDots message={progressMsg} />
+        }
       </div>
     </div>
   );
