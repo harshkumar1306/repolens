@@ -18,15 +18,15 @@ mermaid.initialize({
     clusterBkg:          '#252521',
     titleColor:          '#E2E4D5',
     nodeBorder:          '#585B4A',
-    fontFamily:          '"DM Mono", monospace',
+    fontFamily:          'monospace',  // avoid external font refs that taint canvas
   },
-  flowchart: { htmlLabels: true, curve: 'basis' },
+  flowchart: { htmlLabels: false, curve: 'basis' }, // htmlLabels:false avoids foreignObject taint
   er:        { diagramPadding: 20 },
 });
 
 let counter = 0;
 
-/* ── Renderer ────────────────────────────────────────────────────── */
+/* ── Low-level renderer ──────────────────────────────────────────── */
 function MermaidRenderer({ code, onSvg }) {
   const [svg,   setSvg]   = useState('');
   const [error, setError] = useState(null);
@@ -45,8 +45,9 @@ function MermaidRenderer({ code, onSvg }) {
 
   if (error) return (
     <div style={{
-      padding: 14, borderRadius: 10, background: 'var(--bg-elevated)',
-      border: '1px solid var(--border)', fontFamily: '"DM Mono",monospace', fontSize: 11, color: 'var(--text-muted)',
+      padding: 14, borderRadius: 10,
+      background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+      fontFamily: '"DM Mono",monospace', fontSize: 11, color: 'var(--text-muted)',
     }}>
       ⚠ Diagram parse error
       <pre style={{ marginTop: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{code}</pre>
@@ -62,70 +63,101 @@ function MermaidRenderer({ code, onSvg }) {
     </div>
   );
 
-  return (
-    <div
-      style={{ overflowX: 'auto' }}
-      dangerouslySetInnerHTML={{ __html: svg }}
-    />
-  );
+  return <div style={{ overflowX: 'auto' }} dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
-/* ── PNG download via canvas ─────────────────────────────────────── */
+/* ── PNG download ────────────────────────────────────────────────────
+   Root cause of the old failure:
+   - Blob URLs (createObjectURL) taint the canvas → toDataURL() throws SecurityError
+   Fix: encode SVG as a base64 data URL → never taints the canvas.
+   Also: htmlLabels:false removes <foreignObject> which is the #1 taint source.
+──────────────────────────────────────────────────────────────────── */
 function downloadPng(svgHtml, filename) {
-  // Get dimensions from the SVG string
+  if (!svgHtml) return;
+
+  // 1. Parse SVG to get real dimensions
   const parser = new DOMParser();
   const doc    = parser.parseFromString(svgHtml, 'image/svg+xml');
   const svgEl  = doc.querySelector('svg');
-  const w = parseInt(svgEl?.getAttribute('width') || svgEl?.viewBox?.baseVal?.width || 1400, 10) || 1400;
-  const h = parseInt(svgEl?.getAttribute('height') || svgEl?.viewBox?.baseVal?.height || 900, 10) || 900;
 
-  // Scale up 2× for crispness
+  if (!svgEl) return;
+
+  // Ensure the SVG has explicit width/height so the canvas knows its size
+  const vb = svgEl.getAttribute('viewBox')?.split(' ').map(Number);
+  const W  = parseFloat(svgEl.getAttribute('width'))  || vb?.[2] || 1200;
+  const H  = parseFloat(svgEl.getAttribute('height')) || vb?.[3] || 800;
+
+  // If the SVG had percentage/auto sizes, set them explicitly
+  svgEl.setAttribute('width',  W);
+  svgEl.setAttribute('height', H);
+
+  // 2. Serialize back to string
+  const serializer = new XMLSerializer();
+  const svgString  = serializer.serializeToString(svgEl);
+
+  // 3. Encode as base64 data URL — this NEVER taints the canvas
+  const b64  = btoa(unescape(encodeURIComponent(svgString)));
+  const dataUrl = `data:image/svg+xml;base64,${b64}`;
+
+  // 4. Draw to canvas at 2× scale for crispness
   const scale  = 2;
   const canvas = document.createElement('canvas');
-  canvas.width  = w * scale;
-  canvas.height = h * scale;
+  canvas.width  = W * scale;
+  canvas.height = H * scale;
   const ctx = canvas.getContext('2d');
 
-  // Dark background
+  // Dark background matching app theme
   ctx.fillStyle = '#1C1C1A';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.scale(scale, scale);
 
-  const blob  = new Blob([svgHtml], { type: 'image/svg+xml;charset=utf-8' });
-  const url   = URL.createObjectURL(blob);
-  const img   = new Image();
-  img.onload  = () => {
-    ctx.drawImage(img, 0, 0, w, h);
+  const img    = new Image();
+  img.onload   = () => {
+    ctx.drawImage(img, 0, 0, W, H);
     const link     = document.createElement('a');
     link.href      = canvas.toDataURL('image/png');
     link.download  = filename;
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
+  };
+  img.onerror  = (e) => {
+    console.error('PNG render failed, falling back to SVG download', e);
+    // Fallback: just download the SVG
+    const blob = new Blob([svgString], { type: 'image/svg+xml' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = filename.replace('.png', '.svg');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
-  img.onerror = () => URL.revokeObjectURL(url);
-  img.src = url;
+  img.src = dataUrl;
 }
 
-/* ── Modal (rendered via portal to avoid transform stacking) ─────── */
+/* ── Diagram modal (portal) ──────────────────────────────────────── */
 function DiagramModal({ code, label, svgRef, onClose }) {
+  const filename = `${label.toLowerCase().replace(/\s+/g, '-')}.png`;
+
   return createPortal(
     <AnimatePresence>
       <motion.div
-        key="diagram-overlay"
+        key="diag-overlay"
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         transition={{ duration: 0.15 }}
         onClick={onClose}
         style={{
           position: 'fixed', inset: 0, zIndex: 9000,
           background: 'rgba(22,22,20,0.88)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
+          backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           padding: 24,
         }}
       >
         <motion.div
-          key="diagram-panel"
+          key="diag-panel"
           initial={{ opacity: 0, scale: 0.95, y: 12 }}
           animate={{ opacity: 1, scale: 1,    y: 0   }}
           exit={{   opacity: 0, scale: 0.95, y: 12   }}
@@ -135,26 +167,28 @@ function DiagramModal({ code, label, svgRef, onClose }) {
             background: 'var(--bg-surface)',
             border: '1px solid var(--border-hover)',
             borderRadius: 16, overflow: 'hidden',
-            width: '100%', maxWidth: 960,
-            maxHeight: '88vh',
+            width: '100%', maxWidth: 960, maxHeight: '88vh',
             display: 'flex', flexDirection: 'column',
             boxShadow: '0 48px 96px rgba(0,0,0,0.75)',
           }}
         >
-          {/* Header */}
+          {/* Modal header */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '13px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <BarChart2 size={15} style={{ color: 'var(--accent)' }} />
-              <span style={{ fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
+              <span style={{
+                fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 14,
+                color: 'var(--text-primary)',
+              }}>
                 {label}
               </span>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button
-                onClick={() => svgRef.current && downloadPng(svgRef.current, `${label.toLowerCase().replace(/\s+/g, '-')}.png`)}
+                onClick={() => downloadPng(svgRef.current, filename)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6,
                   padding: '6px 12px', borderRadius: 7,
@@ -195,15 +229,15 @@ function DiagramModal({ code, label, svgRef, onClose }) {
   );
 }
 
-/* ── DiagramCard (exported) ──────────────────────────────────────── */
+/* ── DiagramCard ─────────────────────────────────────────────────── */
 export default function DiagramCard({ code, label = 'Diagram' }) {
   const [modalOpen, setModalOpen] = useState(false);
-  const svgRef = useRef('');
+  const svgRef   = useRef('');
   const filename = `${label.toLowerCase().replace(/\s+/g, '-')}.png`;
 
   return (
     <>
-      {/* Pre-render (hidden) to capture SVG for download */}
+      {/* Hidden pre-render to capture SVG immediately */}
       <div style={{ position: 'absolute', left: -9999, top: -9999, width: 1, height: 1, overflow: 'hidden' }}>
         <MermaidRenderer code={code} onSvg={(s) => { svgRef.current = s; }} />
       </div>
@@ -223,10 +257,16 @@ export default function DiagramCard({ code, label = 'Diagram' }) {
             <BarChart2 size={16} style={{ color: 'var(--accent)' }} />
           </div>
           <div>
-            <p style={{ fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>
+            <p style={{
+              fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 13,
+              color: 'var(--text-primary)',
+            }}>
               {label}
             </p>
-            <p style={{ fontFamily: '"DM Mono",monospace', fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+            <p style={{
+              fontFamily: '"DM Mono",monospace', fontSize: 11,
+              color: 'var(--text-muted)', marginTop: 2,
+            }}>
               Click to view the full diagram
             </p>
           </div>
@@ -235,7 +275,7 @@ export default function DiagramCard({ code, label = 'Diagram' }) {
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           {/* Download PNG */}
           <button
-            onClick={() => svgRef.current && downloadPng(svgRef.current, filename)}
+            onClick={() => downloadPng(svgRef.current, filename)}
             title="Download PNG"
             style={{
               display: 'flex', alignItems: 'center', gap: 5,
@@ -273,7 +313,6 @@ export default function DiagramCard({ code, label = 'Diagram' }) {
         </div>
       </div>
 
-      {/* Portal modal */}
       {modalOpen && (
         <DiagramModal
           code={code}
