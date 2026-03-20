@@ -11,13 +11,9 @@ import Login from './pages/Login';
 
 export const AppContext = createContext(null);
 
-/* ─── Loading dots ─────────────────────────────────────── */
 function LoadingScreen() {
   return (
-    <div
-      className="flex items-center justify-center h-screen"
-      style={{ background: 'var(--bg)' }}
-    >
+    <div className="flex items-center justify-center h-screen" style={{ background: 'var(--bg)' }}>
       <div className="flex items-center gap-2">
         {['#E45B11', '#F4860D', '#F8AB0B'].map((color, i) => (
           <span
@@ -31,16 +27,18 @@ function LoadingScreen() {
   );
 }
 
-/* ─── Auth guard + shell ───────────────────────────────── */
 function AuthGuard({ children }) {
   const { user, loading, logout } = useAuth();
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteOpen,       setPaletteOpen]       = useState(false);
+  const [sidebarCollapsed,  setSidebarCollapsed]   = useState(false);
+  // sidebarSlot: ReactElement | null — set by Results page to inject doc list
+  const [sidebarSlot,       setSidebarSlot]        = useState(null);
 
   useEffect(() => {
     const handler = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        if (user) setPaletteOpen((prev) => !prev);
+        if (user) setPaletteOpen((p) => !p);
       }
       if (e.key === 'Escape') setPaletteOpen(false);
     };
@@ -49,26 +47,24 @@ function AuthGuard({ children }) {
   }, [user]);
 
   if (loading) return <LoadingScreen />;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user)   return <Navigate to="/login" replace />;
 
   return (
-    <AppContext.Provider value={{ user, logout, paletteOpen, setPaletteOpen }}>
-      <div
-        className="flex h-screen overflow-hidden"
-        style={{ background: 'var(--bg)' }}
-      >
+    <AppContext.Provider value={{
+      user, logout,
+      paletteOpen, setPaletteOpen,
+      sidebarCollapsed, setSidebarCollapsed,
+      sidebarSlot, setSidebarSlot,
+    }}>
+      <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
         <Sidebar />
         <main className="flex-1 overflow-hidden min-w-0">{children}</main>
       </div>
-      <CommandPalette
-        open={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
-      />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </AppContext.Provider>
   );
 }
 
-/* ─── Root ─────────────────────────────────────────────── */
 export default function App() {
   return (
     <BrowserRouter>

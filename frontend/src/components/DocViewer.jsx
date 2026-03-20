@@ -1,43 +1,26 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { AnimatePresence, motion } from 'framer-motion';
-import DocTab from './DocTab';
-import MermaidDiagram from './MermaidDiagram';
-import ExportButtons from './ExportButtons';
+import { Copy, Check } from 'lucide-react';
+import DiagramCard from './MermaidDiagram';
 
-const DOC_ORDER = [
-  'OVERVIEW', 'SPEC', 'ARCHITECTURE', 'TECHSTACK',
-  'DATABASE', 'API', 'SETUP', 'DEPLOYMENT',
-];
+const DIAGRAM_TYPES  = new Set(['ARCHITECTURE', 'DATABASE']);
+const DIAGRAM_LABELS = { ARCHITECTURE: 'Architecture Diagram', DATABASE: 'Database Schema' };
 
-const DOC_LABELS = {
-  OVERVIEW:     'Overview',
-  SPEC:         'Spec',
-  ARCHITECTURE: 'Architecture',
-  TECHSTACK:    'Tech Stack',
-  DATABASE:     'Database',
-  API:          'API Ref',
-  SETUP:        'Setup',
-  DEPLOYMENT:   'Deploy',
-};
-
-const MERMAID_TYPES = new Set(['ARCHITECTURE', 'DATABASE']);
-
-/* Split mermaid code blocks from markdown */
-function splitContent(content, hasMermaid) {
-  if (!hasMermaid) return { mermaidCode: null, markdownBody: content };
+/* Extract mermaid block from markdown */
+function extractMermaid(content) {
   const match = content.match(/```mermaid\n([\s\S]+?)```/);
   return {
-    mermaidCode: match?.[1]?.trim() ?? null,
+    mermaidCode:  match?.[1]?.trim() ?? null,
     markdownBody: match ? content.replace(/```mermaid\n[\s\S]+?```/, '') : content,
   };
 }
 
-/* Code block renderer for react-markdown */
-function CodeBlock({ node, inline, className, children, ...props }) {
+/* Syntax-highlighted code block */
+function CodeBlock({ inline, className, children, ...props }) {
   const lang = /language-(\w+)/.exec(className || '')?.[1];
   if (!inline && lang) {
     return (
@@ -48,113 +31,116 @@ function CodeBlock({ node, inline, className, children, ...props }) {
         customStyle={{
           background: 'var(--bg-elevated)',
           border: '1px solid var(--border)',
-          borderRadius: '8px',
-          fontSize: '12px',
-          fontFamily: '"DM Mono", monospace',
-          margin: '0',
+          borderRadius: 8, fontSize: 12,
+          fontFamily: '"DM Mono",monospace', margin: 0,
         }}
-        codeTagProps={{ style: { fontFamily: '"DM Mono", monospace' } }}
+        codeTagProps={{ style: { fontFamily: '"DM Mono",monospace' } }}
         {...props}
       >
         {String(children).replace(/\n$/, '')}
       </SyntaxHighlighter>
     );
   }
+  return <code className={className} {...props}>{children}</code>;
+}
+
+/* Copy button that resets after 2s */
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
   return (
-    <code className={className} {...props}>
-      {children}
-    </code>
+    <button
+      onClick={handleCopy}
+      title="Copy document"
+      style={{
+        position: 'absolute', top: 16, right: 16,
+        display: 'flex', alignItems: 'center', gap: 5,
+        padding: '5px 10px', borderRadius: 7,
+        border: '1px solid var(--border)',
+        background: copied ? 'rgba(248,171,11,0.1)' : 'var(--bg-elevated)',
+        color: copied ? '#F8AB0B' : 'var(--text-muted)',
+        fontFamily: '"DM Mono",monospace', fontSize: 11,
+        cursor: 'pointer', transition: 'all 0.15s', zIndex: 2,
+      }}
+      onMouseEnter={(e) => { if (!copied) { e.currentTarget.style.color='var(--text-primary)'; e.currentTarget.style.borderColor='var(--border-hover)'; } }}
+      onMouseLeave={(e) => { if (!copied) { e.currentTarget.style.color='var(--text-muted)'; e.currentTarget.style.borderColor='var(--border)'; } }}
+    >
+      {copied ? <Check size={12} /> : <Copy size={12} />}
+      {copied ? 'Copied!' : 'Copy'}
+    </button>
   );
 }
 
-export default function DocViewer({ docs, activeTab, setActiveTab, jobId, isDone }) {
-  const scrollRef   = useRef(null);
-  const availTabs   = DOC_ORDER.filter((t) => docs[t]);
-  const content     = activeTab ? docs[activeTab] : null;
-  const hasMermaid  = MERMAID_TYPES.has(activeTab);
+/* ── Main DocViewer ──────────────────────────────────────────────────── */
+export default function DocViewer({ docs, activeTab }) {
+  const scrollRef  = useRef(null);
+  const content    = activeTab ? docs[activeTab] : null;
+  const hasDiagram = DIAGRAM_TYPES.has(activeTab);
 
   const { mermaidCode, markdownBody } = content
-    ? splitContent(content, hasMermaid)
+    ? extractMermaid(content)
     : { mermaidCode: null, markdownBody: '' };
 
-  /* Scroll to top on tab change */
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [activeTab]);
 
-  if (!availTabs.length) return null;
+  if (!activeTab || !content) {
+    return (
+      <div style={{
+        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: 'var(--text-muted)', fontFamily: '"DM Mono",monospace', fontSize: 12,
+      }}>
+        Select a document from the sidebar
+      </div>
+    );
+  }
 
   return (
     <div
-      style={{
-        flex: 1, minWidth: 0, height: '100%',
-        display: 'flex', flexDirection: 'column', overflow: 'hidden',
-      }}
+      ref={scrollRef}
+      style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', position: 'relative' }}
     >
-      {/* Tab bar */}
-      <div
-        style={{
-          display: 'flex', alignItems: 'center',
-          padding: '0 8px',
-          background: 'var(--bg-sidebar)',
-          borderBottom: '1px solid var(--border)',
-          overflowX: 'auto',
-          flexShrink: 0,
-          minHeight: '44px',
-        }}
-      >
-        <div style={{ display: 'flex', flex: 1, alignItems: 'center', overflowX: 'auto' }}>
-          {availTabs.map((type) => (
-            <DocTab
-              key={type}
-              type={type}
-              label={DOC_LABELS[type]}
-              isActive={activeTab === type}
-              onClick={() => setActiveTab(type)}
-            />
-          ))}
-        </div>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          style={{ maxWidth: 760, margin: '0 auto', padding: '36px 32px 64px', position: 'relative' }}
+        >
+          {/* Copy button — top right */}
+          <CopyButton text={content} />
 
-        {isDone && (
-          <div style={{ marginLeft: '12px', flexShrink: 0, paddingRight: '4px' }}>
-            <ExportButtons jobId={jobId} />
-          </div>
-        )}
-      </div>
-
-      {/* Content area */}
-      <div
-        ref={scrollRef}
-        style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}
-      >
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            style={{ maxWidth: '760px', margin: '0 auto', padding: '36px 32px 64px' }}
-          >
-            {/* Mermaid diagram */}
-            {hasMermaid && mermaidCode && (
-              <div style={{ marginBottom: '32px' }}>
-                <MermaidDiagram code={mermaidCode} />
-              </div>
-            )}
-
-            {/* Markdown */}
-            <div className="prose">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{ code: CodeBlock }}
-              >
-                {markdownBody}
-              </ReactMarkdown>
+          {/* Diagram card (replaces inline mermaid) */}
+          {hasDiagram && mermaidCode && (
+            <div style={{ marginBottom: 32 }}>
+              <DiagramCard
+                code={mermaidCode}
+                label={DIAGRAM_LABELS[activeTab]}
+              />
             </div>
-          </motion.div>
-        </AnimatePresence>
-      </div>
+          )}
+
+          {/* Markdown body */}
+          <div className="prose">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{ code: CodeBlock }}
+            >
+              {markdownBody}
+            </ReactMarkdown>
+          </div>
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
