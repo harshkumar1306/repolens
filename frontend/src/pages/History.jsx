@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Package } from 'lucide-react';
+import { Search, Package, Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import HistoryCard from '../components/HistoryCard';
 import api from '../lib/api';
 
@@ -9,12 +10,12 @@ export default function History() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
   const [search,  setSearch]  = useState('');
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     api
       .get('/api/jobs')
       .then((res) => {
-        // Backend might return array directly OR { jobs: [...] }
         const data = Array.isArray(res.data)
           ? res.data
           : (res.data?.jobs || res.data?.data || []);
@@ -25,6 +26,26 @@ export default function History() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  /* ── Clear all history ─────────────────────────────────────────── */
+  const handleClearHistory = async () => {
+    if (jobs.length === 0) return;
+    const confirmed = window.confirm(
+      `Delete all ${jobs.length} analysis records? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setClearing(true);
+    try {
+      await api.delete('/api/jobs');
+      setJobs([]);
+      toast.success('History cleared');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to clear history');
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const filtered = jobs.filter((j) => {
     const q = search.toLowerCase();
@@ -42,6 +63,7 @@ export default function History() {
         padding: '14px 24px', flexShrink: 0,
         background: 'var(--bg-sidebar)', borderBottom: '1px solid var(--border)',
       }}>
+        {/* Title */}
         <div>
           <h2 style={{ fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>
             Analysis History
@@ -51,21 +73,59 @@ export default function History() {
           </p>
         </div>
 
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '7px 12px', borderRadius: 9,
-          background: 'var(--bg-elevated)', border: '1px solid var(--border)', width: 210,
-        }}>
-          <Search size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search repos…"
-            style={{
-              flex: 1, background: 'transparent', border: 'none', outline: 'none',
-              fontFamily: '"DM Mono",monospace', fontSize: 12, color: 'var(--text-primary)',
-            }}
-          />
+        {/* Right controls: Clear All + Search */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+
+          {/* Clear All History button — only shown when there are jobs */}
+          {jobs.length > 0 && (
+            <button
+              onClick={handleClearHistory}
+              disabled={clearing}
+              title="Clear all analysis history"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '7px 12px', borderRadius: 9,
+                background: 'transparent',
+                border: '1px solid rgba(228,91,17,0.3)',
+                color: clearing ? 'var(--text-muted)' : 'var(--accent)',
+                fontFamily: '"DM Mono",monospace', fontSize: 12,
+                cursor: clearing ? 'default' : 'pointer',
+                transition: 'all 0.15s',
+                opacity: clearing ? 0.6 : 1,
+              }}
+              onMouseEnter={(e) => {
+                if (!clearing) {
+                  e.currentTarget.style.background = 'rgba(228,91,17,0.08)';
+                  e.currentTarget.style.borderColor = 'rgba(228,91,17,0.6)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.borderColor = 'rgba(228,91,17,0.3)';
+              }}
+            >
+              <Trash2 size={12} />
+              {clearing ? 'Clearing…' : 'Clear All'}
+            </button>
+          )}
+
+          {/* Search */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '7px 12px', borderRadius: 9,
+            background: 'var(--bg-elevated)', border: '1px solid var(--border)', width: 210,
+          }}>
+            <Search size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search repos…"
+              style={{
+                flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                fontFamily: '"DM Mono",monospace', fontSize: 12, color: 'var(--text-primary)',
+              }}
+            />
+          </div>
         </div>
       </div>
 

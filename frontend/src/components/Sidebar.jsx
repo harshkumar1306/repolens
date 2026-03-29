@@ -18,12 +18,12 @@ const NAV_ITEMS = [
   { to: '/history', end: false, label: 'History',   Icon: Clock },
 ];
 
-/* ─── Sidebar inner content ─────────────────────────────────────── */
+/* ─── Sidebar inner content (full expanded state) ─────────────────── */
 function SidebarInner({ user, onNewAnalysis, onLogout, sidebarSlot }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minWidth: 224 }}>
 
-      {/* New Analysis */}
+      {/* New Analysis button — hidden when slot is active (Results page injects its own) */}
       {!sidebarSlot && (
         <div style={{ padding: '4px 12px 10px' }}>
           <button
@@ -43,7 +43,7 @@ function SidebarInner({ user, onNewAnalysis, onLogout, sidebarSlot }) {
         </div>
       )}
 
-      {/* Nav or slot */}
+      {/* Nav or Results-page slot */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 10px' }}>
         {sidebarSlot ? (
           sidebarSlot
@@ -59,7 +59,7 @@ function SidebarInner({ user, onNewAnalysis, onLogout, sidebarSlot }) {
         )}
       </div>
 
-      {/* User row */}
+      {/* User row — always shown at bottom in expanded state */}
       {!sidebarSlot && (
         <div style={{
           padding: '10px 12px',
@@ -69,7 +69,7 @@ function SidebarInner({ user, onNewAnalysis, onLogout, sidebarSlot }) {
           {user?.avatarUrl ? (
             <img
               src={user.avatarUrl}
-              alt={user.username}
+              alt={user?.username || 'User'}
               style={{
                 width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
                 border: '1.5px solid var(--border-hover)', objectFit: 'cover',
@@ -103,6 +103,56 @@ function SidebarInner({ user, onNewAnalysis, onLogout, sidebarSlot }) {
   );
 }
 
+/* ─── Collapsed rail ──────────────────────────────────────────────── */
+function CollapsedRail({ user, onExpand }) {
+  return (
+    <div style={{
+      width: 44, height: '100%',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center',
+      paddingTop: 10, paddingBottom: 12,
+      flexShrink: 0,
+    }}>
+      {/* Expand button */}
+      <button
+        onClick={onExpand}
+        title="Expand sidebar"
+        className="sidebar-icon-btn"
+      >
+        <PanelLeftOpen size={14} />
+      </button>
+
+      {/* Spacer */}
+      <div style={{ flex: 1 }} />
+
+      {/* Avatar — visible even when collapsed, tooltip shows username */}
+      <div title={user?.username || 'User'}>
+        {user?.avatarUrl ? (
+          <img
+            src={user.avatarUrl}
+            alt={user?.username || 'User'}
+            style={{
+              width: 28, height: 28, borderRadius: '50%',
+              border: '1.5px solid var(--border-hover)', objectFit: 'cover',
+              display: 'block',
+            }}
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+        ) : (
+          <div style={{
+            width: 28, height: 28, borderRadius: '50%',
+            background: 'linear-gradient(135deg,#E45B11,#F8AB0B)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: '"DM Mono",monospace', fontSize: 11, color: 'white', fontWeight: 600,
+          }}>
+            {(user?.username || 'U')[0].toUpperCase()}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main export ─────────────────────────────────────────────────── */
 export default function Sidebar() {
   const {
@@ -111,7 +161,7 @@ export default function Sidebar() {
     sidebarCollapsed, setSidebarCollapsed,
     sidebarSlot,
   } = useContext(AppContext);
-  const navigate     = useNavigate();
+  const navigate    = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogout = async () => {
@@ -121,95 +171,88 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* ── Desktop sidebar ──────────────────────────────────────────
-          Key fix: never use display:none. Use width:0 + overflow:hidden.
-          Framer Motion animates the width; content is hidden by overflow.
+      {/* ── Desktop sidebar ───────────────────────────────────────────
+          FIX: collapsed → width:44px (rail), NOT width:0.
+          The rail always shows the toggle button (top) and avatar (bottom).
+          No more floating expand button needed.
       ──────────────────────────────────────────────────────────────── */}
       <motion.aside
-        animate={{ width: sidebarCollapsed ? 0 : 224 }}
+        animate={{ width: sidebarCollapsed ? 44 : 224 }}
         transition={{ type: 'spring', damping: 30, stiffness: 280 }}
         style={{
           background: 'var(--bg-sidebar)',
           borderRight: '1px solid var(--border)',
           height: '100%',
-          overflow: 'hidden',      /* hides content when width → 0 */
+          overflow: 'hidden',
           flexShrink: 0,
-          /* NO display:none — that prevents Framer Motion from working */
+          position: 'relative',
         }}
         className="hidden md:flex flex-col"
       >
-        {/* Logo row */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '14px 12px 8px', flexShrink: 0, minWidth: 224,
-        }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-            background: 'linear-gradient(135deg,#E45B11 0%,#F8AB0B 100%)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <LensIcon size={15} />
-          </div>
-          <span style={{
-            fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: 15,
-            color: 'var(--text-primary)', letterSpacing: '-0.02em', whiteSpace: 'nowrap',
-          }}>
-            RepoLens
-          </span>
-          <button
-            onClick={() => setSidebarCollapsed(true)}
-            title="Collapse sidebar"
-            className="sidebar-icon-btn"
-            style={{ marginLeft: 'auto', flexShrink: 0 }}
-          >
-            <PanelLeftClose size={14} />
-          </button>
-        </div>
+        <AnimatePresence mode="wait" initial={false}>
+          {sidebarCollapsed ? (
+            /* ── Collapsed rail ── */
+            <motion.div
+              key="rail"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12 }}
+              style={{ height: '100%' }}
+            >
+              <CollapsedRail
+                user={user}
+                onExpand={() => setSidebarCollapsed(false)}
+              />
+            </motion.div>
+          ) : (
+            /* ── Full sidebar ── */
+            <motion.div
+              key="full"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12 }}
+              style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minWidth: 224 }}
+            >
+              {/* Logo row */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '14px 12px 8px', flexShrink: 0,
+              }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                  background: 'linear-gradient(135deg,#E45B11 0%,#F8AB0B 100%)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <LensIcon size={15} />
+                </div>
+                <span style={{
+                  fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: 15,
+                  color: 'var(--text-primary)', letterSpacing: '-0.02em', whiteSpace: 'nowrap',
+                }}>
+                  RepoLens
+                </span>
+                <button
+                  onClick={() => setSidebarCollapsed(true)}
+                  title="Collapse sidebar"
+                  className="sidebar-icon-btn"
+                  style={{ marginLeft: 'auto', flexShrink: 0 }}
+                >
+                  <PanelLeftClose size={14} />
+                </button>
+              </div>
 
-        <SidebarInner
-          user={user}
-          onNewAnalysis={() => setPaletteOpen(true)}
-          onLogout={handleLogout}
-          sidebarSlot={sidebarSlot}
-        />
+              <SidebarInner
+                user={user}
+                onNewAnalysis={() => setPaletteOpen(true)}
+                onLogout={handleLogout}
+                sidebarSlot={sidebarSlot}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.aside>
-
-      {/* ── Floating expand button — only shown when sidebar is collapsed ── */}
-      <AnimatePresence>
-        {sidebarCollapsed && (
-          <motion.button
-            key="expand-btn"
-            initial={{ opacity: 0, x: -6 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -6 }}
-            transition={{ duration: 0.15 }}
-            onClick={() => setSidebarCollapsed(false)}
-            title="Expand sidebar"
-            className="hidden md:flex items-center justify-center"
-            style={{
-              position: 'absolute', top: 10, left: 8, zIndex: 20,
-              width: 32, height: 32,
-              padding: 0,
-              borderRadius: 8,
-              background: 'var(--bg-sidebar)',
-              border: '1px solid var(--border)',
-              color: 'var(--text-muted)',
-              cursor: 'pointer',
-              transition: 'color 0.15s, border-color 0.15s',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = 'var(--text-primary)';
-              e.currentTarget.style.borderColor = 'var(--border-hover)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = 'var(--text-muted)';
-              e.currentTarget.style.borderColor = 'var(--border)';
-            }}
-          >
-            <PanelLeftOpen size={14} />
-          </motion.button>
-        )}
-      </AnimatePresence>
 
       {/* ── Mobile top bar ─────────────────────────────────────────── */}
       <div

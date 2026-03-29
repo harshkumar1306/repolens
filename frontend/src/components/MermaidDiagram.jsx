@@ -18,9 +18,9 @@ mermaid.initialize({
     clusterBkg:          '#252521',
     titleColor:          '#E2E4D5',
     nodeBorder:          '#585B4A',
-    fontFamily:          'monospace',  // avoid external font refs that taint canvas
+    fontFamily:          'monospace',
   },
-  flowchart: { htmlLabels: false, curve: 'basis' }, // htmlLabels:false avoids foreignObject taint
+  flowchart: { htmlLabels: false, curve: 'basis' },
   er:        { diagramPadding: 20 },
 });
 
@@ -66,64 +66,74 @@ function MermaidRenderer({ code, onSvg }) {
   return <div style={{ overflowX: 'auto' }} dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
-/* ── PNG download ────────────────────────────────────────────────────
-   Root cause of the old failure:
-   - Blob URLs (createObjectURL) taint the canvas → toDataURL() throws SecurityError
-   Fix: encode SVG as a base64 data URL → never taints the canvas.
-   Also: htmlLabels:false removes <foreignObject> which is the #1 taint source.
-──────────────────────────────────────────────────────────────────── */
+/* ── PNG download ─────────────────────────────────────────────────────────────
+   Root cause of blurry/wrong-size downloads:
+   Mermaid frequently outputs SVGs with width="100%" or width as a small number
+   that doesn't reflect the actual rendered size. parseFloat("100%") = 100 → tiny PNG.
+
+   Fix: ALWAYS derive pixel dimensions from the viewBox, never from width/height
+   attributes (which may be %, "auto", or absent). Then render at 3× scale.
+──────────────────────────────────────────────────────────────────────────────── */
 function downloadPng(svgHtml, filename) {
   if (!svgHtml) return;
 
-  // 1. Parse SVG to get real dimensions
   const parser = new DOMParser();
   const doc    = parser.parseFromString(svgHtml, 'image/svg+xml');
   const svgEl  = doc.querySelector('svg');
-
   if (!svgEl) return;
 
-  // Ensure the SVG has explicit width/height so the canvas knows its size
-  const vb = svgEl.getAttribute('viewBox')?.split(' ').map(Number);
-  const W  = parseFloat(svgEl.getAttribute('width'))  || vb?.[2] || 1200;
-  const H  = parseFloat(svgEl.getAttribute('height')) || vb?.[3] || 800;
+  // ── Step 1: Get real pixel dimensions ─────────────────────────────────────
+  // viewBox is the authoritative source; width/height may be % or missing.
+  const vbStr = svgEl.getAttribute('viewBox');
+  const vb    = vbStr?.split(/[\s,]+/).map(Number).filter((n) => !isNaN(n));
 
-  // If the SVG had percentage/auto sizes, set them explicitly
+  const rawW = svgEl.getAttribute('width');
+  const rawH = svgEl.getAttribute('height');
+
+  // Only use width/height if they are absolute pixel values (no %, no "auto")
+  const isAbsolutePixel = (v) =>
+    v && !v.includes('%') && !v.includes('auto') && parseFloat(v) > 50;
+
+  const W = isAbsolutePixel(rawW) ? parseFloat(rawW) : (vb?.[2] || 1200);
+  const H = isAbsolutePixel(rawH) ? parseFloat(rawH) : (vb?.[3] || 800);
+
+  // ── Step 2: Set explicit pixel dimensions on the SVG ──────────────────────
   svgEl.setAttribute('width',  W);
   svgEl.setAttribute('height', H);
+  // Clear any CSS that might override
+  svgEl.style.width  = `${W}px`;
+  svgEl.style.height = `${H}px`;
+  svgEl.style.maxWidth = 'none';
 
-  // 2. Serialize back to string
+  // ── Step 3: Serialize to base64 data URL (never taints canvas) ────────────
   const serializer = new XMLSerializer();
   const svgString  = serializer.serializeToString(svgEl);
+  const b64        = btoa(unescape(encodeURIComponent(svgString)));
+  const dataUrl    = `data:image/svg+xml;base64,${b64}`;
 
-  // 3. Encode as base64 data URL — this NEVER taints the canvas
-  const b64  = btoa(unescape(encodeURIComponent(svgString)));
-  const dataUrl = `data:image/svg+xml;base64,${b64}`;
-
-  // 4. Draw to canvas at 2× scale for crispness
-  const scale  = 2;
+  // ── Step 4: Draw to canvas at 3× scale for crisp retina output ────────────
+  const scale  = 3;
   const canvas = document.createElement('canvas');
   canvas.width  = W * scale;
   canvas.height = H * scale;
   const ctx = canvas.getContext('2d');
 
-  // Dark background matching app theme
   ctx.fillStyle = '#1C1C1A';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.scale(scale, scale);
 
-  const img    = new Image();
-  img.onload   = () => {
+  const img   = new Image();
+  img.onload  = () => {
     ctx.drawImage(img, 0, 0, W, H);
-    const link     = document.createElement('a');
-    link.href      = canvas.toDataURL('image/png');
-    link.download  = filename;
+    const link    = document.createElement('a');
+    link.href     = canvas.toDataURL('image/png');
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
-  img.onerror  = (e) => {
-    console.error('PNG render failed, falling back to SVG download', e);
-    // Fallback: just download the SVG
+  img.onerror = (e) => {
+    console.error('PNG render failed — falling back to SVG', e);
     const blob = new Blob([svgString], { type: 'image/svg+xml' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
@@ -220,6 +230,8 @@ function DiagramModal({ code, label, svgRef, onClose }) {
 
           {/* Diagram */}
           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', padding: 32, background: 'var(--bg)' }}>
+            {/* FIX: The modal has its own renderer that captures the correct full-size SVG.
+                This ensures svgRef gets the modal-sized render, not the tiny hidden one. */}
             <MermaidRenderer code={code} onSvg={(s) => { svgRef.current = s; }} />
           </div>
         </motion.div>
@@ -232,16 +244,13 @@ function DiagramModal({ code, label, svgRef, onClose }) {
 /* ── DiagramCard ─────────────────────────────────────────────────── */
 export default function DiagramCard({ code, label = 'Diagram' }) {
   const [modalOpen, setModalOpen] = useState(false);
+  // svgRef is populated by the modal's MermaidRenderer (full size),
+  // not the hidden pre-render (which may be tiny)
   const svgRef   = useRef('');
   const filename = `${label.toLowerCase().replace(/\s+/g, '-')}.png`;
 
   return (
     <>
-      {/* Hidden pre-render to capture SVG immediately */}
-      <div style={{ position: 'absolute', left: -9999, top: -9999, width: 1, height: 1, overflow: 'hidden' }}>
-        <MermaidRenderer code={code} onSvg={(s) => { svgRef.current = s; }} />
-      </div>
-
       {/* Inline card */}
       <div style={{
         padding: '16px 20px', borderRadius: 12,
@@ -267,15 +276,22 @@ export default function DiagramCard({ code, label = 'Diagram' }) {
               fontFamily: '"DM Mono",monospace', fontSize: 11,
               color: 'var(--text-muted)', marginTop: 2,
             }}>
-              Click to view the full diagram
+              Open to view &amp; download PNG
             </p>
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-          {/* Download PNG */}
+          {/* Download PNG — only works after modal has been opened once (svgRef populated) */}
           <button
-            onClick={() => downloadPng(svgRef.current, filename)}
+            onClick={() => {
+              if (svgRef.current) {
+                downloadPng(svgRef.current, filename);
+              } else {
+                // If modal hasn't been opened yet, open it first
+                setModalOpen(true);
+              }
+            }}
             title="Download PNG"
             style={{
               display: 'flex', alignItems: 'center', gap: 5,
@@ -292,7 +308,7 @@ export default function DiagramCard({ code, label = 'Diagram' }) {
             PNG
           </button>
 
-          {/* View */}
+          {/* View in modal */}
           <button
             onClick={() => setModalOpen(true)}
             style={{

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, CheckCircle, Loader2, Circle,
-  Clock, ExternalLink, XCircle,
+  Clock, ExternalLink, XCircle, Plus,
 } from 'lucide-react';
 import api from '../lib/api';
 import { useSocket } from '../hooks/useSocket';
@@ -19,13 +19,13 @@ const DOC_ORDER = [
 
 const DOC_META = {
   OVERVIEW:     { label: 'Project Overview',    icon: '◆' },
-  SPEC:         { label: 'Reverse Eng. Spec',    icon: '◈' },
-  ARCHITECTURE: { label: 'Architecture',         icon: '⬡' },
-  TECHSTACK:    { label: 'Tech Stack',           icon: '◉' },
-  DATABASE:     { label: 'Database Schema',      icon: '◫' },
-  API:          { label: 'API Reference',        icon: '⬖' },
-  SETUP:        { label: 'Setup Guide',          icon: '◔' },
-  DEPLOYMENT:   { label: 'Deployment Guide',     icon: '◐' },
+  SPEC:         { label: 'Reverse Eng. Spec',   icon: '◈' },
+  ARCHITECTURE: { label: 'Architecture',        icon: '⬡' },
+  TECHSTACK:    { label: 'Tech Stack',          icon: '◉' },
+  DATABASE:     { label: 'Database Schema',     icon: '◫' },
+  API:          { label: 'API Reference',       icon: '⬖' },
+  SETUP:        { label: 'Setup Guide',         icon: '◔' },
+  DEPLOYMENT:   { label: 'Deployment Guide',    icon: '◐' },
 };
 
 /* ─── Waiting dots ──────────────────────────────────────────────── */
@@ -74,7 +74,7 @@ function GeneratingSidebar({ completedTypes, progressMsg, rateLimitMsg, repoName
         </div>
       )}
 
-      {/* Progress */}
+      {/* Progress bar */}
       <div style={{ marginBottom: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
           <p style={{ fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 12, color: 'var(--text-primary)' }}>
@@ -123,7 +123,7 @@ function GeneratingSidebar({ completedTypes, progressMsg, rateLimitMsg, repoName
         })}
       </div>
 
-      {/* Status message */}
+      {/* Status / rate-limit message */}
       {(progressMsg || rateLimitMsg) && (
         <div style={{
           margin: '10px 0',
@@ -141,7 +141,7 @@ function GeneratingSidebar({ completedTypes, progressMsg, rateLimitMsg, repoName
         </div>
       )}
 
-      {/* Cancel — always at bottom with enough spacing */}
+      {/* Cancel */}
       <button
         onClick={onCancel}
         style={{
@@ -162,52 +162,39 @@ function GeneratingSidebar({ completedTypes, progressMsg, rateLimitMsg, repoName
   );
 }
 
-/* ─── Done sidebar slot ─────────────────────────────────────────── */
-function DoneSidebar({ docs, activeTab, setActiveTab, jobId, completedTypes, repoUrl, repoName, onDashboard }) {
+/* ─── Done sidebar slot ──────────────────────────────────────────────
+   FIX: Removed Dashboard button and repo link — those live in the
+   topbar. This sidebar slot now shows only:
+     1. New Analysis button (opens command palette)
+     2. Document list with active highlighting
+     3. Export section
+──────────────────────────────────────────────────────────────────── */
+function DoneSidebar({ docs, activeTab, setActiveTab, jobId, completedTypes, onNewAnalysis }) {
   const [pdfOpen, setPdfOpen] = useState(false);
 
   return (
     <>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {/* Dashboard button */}
-        <button
-          onClick={onDashboard}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '7px 10px', borderRadius: 8, border: 'none',
-            background: 'transparent', color: 'var(--text-muted)',
-            fontFamily: '"DM Mono",monospace', fontSize: 11,
-            cursor: 'pointer', marginBottom: 10, width: '100%', textAlign: 'left',
-            transition: 'all 0.15s',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'transparent'; }}
-        >
-          <LayoutDashboard size={12} />
-          Dashboard
-        </button>
 
-        {/* Repo link */}
-        {repoUrl && (
-          <a
-            href={repoUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+        {/* New Analysis button */}
+        <div style={{ paddingBottom: 10 }}>
+          <button
+            onClick={onNewAnalysis}
+            className="sidebar-new-btn"
             style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '5px 10px', marginBottom: 10, borderRadius: 7,
-              textDecoration: 'none', fontFamily: '"DM Mono",monospace', fontSize: 11,
-              color: 'var(--text-muted)', transition: 'color 0.15s',
+              width: '100%', display: 'flex', alignItems: 'center',
+              justifyContent: 'space-between', padding: '8px 12px', borderRadius: 8,
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-amber)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; }}
           >
-            <ExternalLink size={11} />
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{repoName}</span>
-          </a>
-        )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Plus size={13} />
+              <span>New Analysis</span>
+            </div>
+            <kbd className="sidebar-kbd">⌘</kbd>
+          </button>
+        </div>
 
-        {/* Docs label */}
+        {/* Documents label */}
         <p style={{
           fontFamily: '"DM Mono",monospace', fontSize: 10,
           letterSpacing: '0.08em', textTransform: 'uppercase',
@@ -233,8 +220,18 @@ function DoneSidebar({ docs, activeTab, setActiveTab, jobId, completedTypes, rep
                   fontFamily: '"DM Mono",monospace', fontSize: 12,
                   cursor: 'pointer', width: '100%', textAlign: 'left', transition: 'all 0.12s',
                 }}
-                onMouseEnter={(e) => { if (!isActive) { e.currentTarget.style.background = 'rgba(226,228,213,0.04)'; e.currentTarget.style.color = 'var(--text-primary)'; } }}
-                onMouseLeave={(e) => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; } }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = 'rgba(226,228,213,0.04)';
+                    e.currentTarget.style.color = 'var(--text-primary)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                  }
+                }}
               >
                 <span style={{ fontSize: 10, color: isActive ? 'var(--accent)' : 'var(--text-muted)', flexShrink: 0 }}>
                   {DOC_META[type].icon}
@@ -283,9 +280,10 @@ function DoneSidebar({ docs, activeTab, setActiveTab, jobId, completedTypes, rep
 
 /* ─── Results page ──────────────────────────────────────────────── */
 export default function Results() {
-  const { id }            = useParams();
-  const navigate          = useNavigate();
-  const { setSidebarSlot } = useContext(AppContext);
+  const { id }              = useParams();
+  const navigate            = useNavigate();
+  // FIX: added setPaletteOpen so DoneSidebar can open the command palette
+  const { setSidebarSlot, setPaletteOpen } = useContext(AppContext);
 
   const [docs,         setDocs]         = useState({});
   const [status,       setStatus]       = useState('loading');
@@ -302,10 +300,9 @@ export default function Results() {
     } catch { return url; }
   };
 
-  const handleDashboard = useCallback(() => navigate('/'), [navigate]);
-  const handleCancel    = useCallback(() => navigate('/'), [navigate]);
+  const handleCancel = useCallback(() => navigate('/'), [navigate]);
 
-  /* Load job */
+  /* Load job on mount */
   useEffect(() => {
     api.get(`/api/jobs/${id}`)
       .then((res) => {
@@ -329,21 +326,24 @@ export default function Results() {
       .catch(() => navigate('/'));
   }, [id]);
 
-  /* Socket */
+  /* Socket — only connects when actively processing */
   const handlers = {
-    'job:status':     useCallback(({ message }) => { setProgressMsg(message); setStatus('processing'); }, []),
-    'job:rateLimit':  useCallback(({ message }) => { setRateLimitMsg(message); }, []),
+    'job:status':    useCallback(({ message }) => { setProgressMsg(message); setStatus('processing'); }, []),
+    'job:rateLimit': useCallback(({ message }) => { setRateLimitMsg(message); }, []),
     'job:docComplete': useCallback(({ type, content }) => {
       setRateLimitMsg(null);
       setDocs((p) => ({ ...p, [type]: content }));
       setActiveTab((p) => p || type);
     }, []),
-    'job:done':  useCallback(() => { setStatus('done'); }, []),
+    'job:done': useCallback(() => { setStatus('done'); }, []),
+    /* job:cached — backend now completes all DB writes before responding,
+       so the initial GET /api/jobs/:id will already return DONE + docs.
+       This handler is a safety net for any edge cases. */
     'job:cached': useCallback(({ jobId }) => {
       api.get(`/api/jobs/${jobId}`).then((res) => {
         const job = res.data?.job || res.data;
         const map = {};
-        job.documents.forEach((d) => { map[d.type] = d.content; });
+        (job.documents || []).forEach((d) => { map[d.type] = d.content; });
         setDocs(map);
         setActiveTab(DOC_ORDER.find((t) => map[t]));
         setStatus('done');
@@ -358,7 +358,7 @@ export default function Results() {
   const isDone         = status === 'done';
   const completedTypes = DOC_ORDER.filter((t) => docs[t]);
 
-  /* Inject sidebar slot — use a ref to avoid infinite render loops */
+  /* Inject sidebar slot */
   const slotVersion = useRef(0);
   useEffect(() => {
     slotVersion.current += 1;
@@ -384,9 +384,8 @@ export default function Results() {
           setActiveTab={setActiveTab}
           jobId={id}
           completedTypes={completedTypes}
-          repoUrl={repoUrl}
-          repoName={repoName}
-          onDashboard={handleDashboard}
+          /* FIX: opens the global command palette, not a separate page */
+          onNewAnalysis={() => setPaletteOpen(true)}
         />
       );
     }
@@ -397,7 +396,7 @@ export default function Results() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* ── Top bar ── */}
+      {/* ── Top bar — Dashboard + repo link live HERE, not in the sidebar ── */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '0 16px', flexShrink: 0, minHeight: 44,
@@ -405,7 +404,7 @@ export default function Results() {
       }}>
         {/* Dashboard link */}
         <button
-          onClick={handleDashboard}
+          onClick={() => navigate('/')}
           style={{
             display: 'flex', alignItems: 'center', gap: 6,
             padding: '5px 8px', borderRadius: 7, border: 'none',
@@ -422,7 +421,7 @@ export default function Results() {
 
         <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>›</span>
 
-        {/* Repo name / link */}
+        {/* Repo link */}
         {repoUrl ? (
           <a
             href={repoUrl}
