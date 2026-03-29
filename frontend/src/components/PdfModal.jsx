@@ -16,23 +16,21 @@ const DOC_ORDER = [
   { type: 'DEPLOYMENT',   label: 'Deployment Guide'      },
 ];
 
-/* ── Parse error from a blob response ───────────────────────────── */
 async function parseBlobError(err) {
   try {
     if (err.response?.data instanceof Blob) {
       const text = await err.response.data.text();
-      const json = JSON.parse(text);
-      return json.message || json.error || text;
+      try { return JSON.parse(text)?.error || JSON.parse(text)?.message || text; } catch { return text; }
     }
-    return err.response?.data?.message || err.message || 'Export failed';
+    return err.response?.data?.error || err.response?.data?.message || err.message || 'Export failed';
   } catch {
     return err.message || 'Export failed';
   }
 }
 
 export default function PdfModal({ jobId, completedTypes, onClose }) {
-  const available    = DOC_ORDER.filter((d) => completedTypes.includes(d.type));
-  const [selected,   setSelected]   = useState(new Set(available.map((d) => d.type)));
+  const available  = DOC_ORDER.filter((d) => completedTypes.includes(d.type));
+  const [selected, setSelected]   = useState(new Set(available.map((d) => d.type)));
   const [pdfLoading, setPdfLoading] = useState(false);
   const [zipLoading, setZipLoading] = useState(false);
   const [pdfError,   setPdfError]   = useState(null);
@@ -42,20 +40,21 @@ export default function PdfModal({ jobId, completedTypes, onClose }) {
     selected.size === available.length ? new Set() : new Set(available.map((d) => d.type))
   );
 
-  /* ── Generic blob download ─────────────────────────────────────── */
-  const downloadBlob = async (format, setLoading) => {
-    setLoading(true);
-    if (format === 'pdf') setPdfError(null);
+  /* ── PDF download — passes selected types as query params ── */
+  const downloadPdf = async () => {
+    if (selected.size === 0) return;
+    setPdfLoading(true);
+    setPdfError(null);
     try {
-      const res = await api.get(`/api/export/${jobId}/${format}`, {
+      // FIX: pass selected types so the backend only renders chosen docs
+      const typesParam = Array.from(selected).join(',');
+      const res = await api.get(`/api/export/${jobId}/pdf?types=${typesParam}`, {
         responseType: 'blob',
-        timeout: 60000, // Puppeteer on free tier can be slow — 60 s
+        timeout: 90000, // Puppeteer on free tier — give it 90s
       });
 
-      // Verify the response is actually the expected type, not an HTML error page
       const contentType = res.headers?.['content-type'] || '';
-      if (format === 'pdf' && !contentType.includes('pdf')) {
-        // Server returned something unexpected — read it as text for the error
+      if (!contentType.includes('pdf')) {
         const text = await res.data.text();
         throw new Error(text.slice(0, 200));
       }
@@ -63,21 +62,42 @@ export default function PdfModal({ jobId, completedTypes, onClose }) {
       const url  = URL.createObjectURL(res.data);
       const a    = document.createElement('a');
       a.href     = url;
-      a.download = `repolens-${jobId}.${format === 'zip' ? 'zip' : 'pdf'}`;
+      a.download = `repolens-${jobId}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.success(`${format.toUpperCase()} downloaded`);
+      toast.success('PDF downloaded');
     } catch (err) {
       const msg = await parseBlobError(err);
-      if (format === 'pdf') {
-        setPdfError(msg);
-      } else {
-        toast.error(`ZIP export failed: ${msg}`);
-      }
+      setPdfError(msg);
     } finally {
-      setLoading(false);
+      setPdfLoading(false);
+    }
+  };
+
+  /* ── ZIP download ── */
+  const downloadZip = async () => {
+    setZipLoading(true);
+    try {
+      const res = await api.get(`/api/export/${jobId}/zip`, {
+        responseType: 'blob',
+        timeout: 60000,
+      });
+      const url  = URL.createObjectURL(res.data);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `repolens-${jobId}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('ZIP downloaded');
+    } catch (err) {
+      const msg = await parseBlobError(err);
+      toast.error(`ZIP failed: ${msg}`);
+    } finally {
+      setZipLoading(false);
     }
   };
 
@@ -99,8 +119,8 @@ export default function PdfModal({ jobId, completedTypes, onClose }) {
         <motion.div
           key="pdf-panel"
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
-          animate={{ opacity: 1, scale: 1,    y: 0   }}
-          exit={{   opacity: 0, scale: 0.95, y: 10   }}
+          animate={{ opacity: 1, scale: 1,    y: 0  }}
+          exit={{   opacity: 0, scale: 0.95, y: 10  }}
           transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
           onClick={(e) => e.stopPropagation()}
           style={{
@@ -118,19 +138,13 @@ export default function PdfModal({ jobId, completedTypes, onClose }) {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <FileText size={15} style={{ color: 'var(--accent)' }} />
-              <span style={{
-                fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 14,
-                color: 'var(--text-primary)',
-              }}>
+              <span style={{ fontFamily: 'Syne,sans-serif', fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
                 Export Documentation
               </span>
             </div>
             <button
               onClick={onClose}
-              style={{
-                padding: 6, borderRadius: 7, border: 'none',
-                background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer',
-              }}
+              style={{ padding: 6, borderRadius: 7, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-elevated)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
             >
@@ -141,18 +155,12 @@ export default function PdfModal({ jobId, completedTypes, onClose }) {
           {/* Doc selection */}
           <div style={{ padding: '12px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <p style={{
-                fontFamily: '"DM Mono",monospace', fontSize: 10,
-                letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)',
-              }}>
+              <p style={{ fontFamily: '"DM Mono",monospace', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
                 Select documents for PDF
               </p>
               <button
                 onClick={toggleAll}
-                style={{
-                  fontFamily: '"DM Mono",monospace', fontSize: 11,
-                  color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer',
-                }}
+                style={{ fontFamily: '"DM Mono",monospace', fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer' }}
               >
                 {selected.size === available.length ? 'Deselect all' : 'Select all'}
               </button>
@@ -172,16 +180,13 @@ export default function PdfModal({ jobId, completedTypes, onClose }) {
                       cursor: 'pointer', textAlign: 'left', transition: 'background 0.12s',
                     }}
                     onMouseEnter={(e) => { if (!checked) e.currentTarget.style.background = 'var(--bg-elevated)'; }}
-                    onMouseLeave={(e) => { if (!checked) e.currentTarget.style.background = checked ? 'rgba(228,91,17,0.07)' : 'transparent'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = checked ? 'rgba(228,91,17,0.07)' : 'transparent'; }}
                   >
                     {checked
                       ? <CheckSquare size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
                       : <Square      size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
                     }
-                    <span style={{
-                      fontFamily: '"DM Mono",monospace', fontSize: 12,
-                      color: checked ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    }}>
+                    <span style={{ fontFamily: '"DM Mono",monospace', fontSize: 12, color: checked ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
                       {label}
                     </span>
                   </button>
@@ -193,10 +198,8 @@ export default function PdfModal({ jobId, completedTypes, onClose }) {
           {/* PDF error banner */}
           {pdfError && (
             <div style={{
-              margin: '0 20px 10px',
-              padding: '10px 12px', borderRadius: 8,
-              background: 'rgba(228,91,17,0.08)',
-              border: '1px solid rgba(228,91,17,0.25)',
+              margin: '0 20px 10px', padding: '10px 12px', borderRadius: 8,
+              background: 'rgba(228,91,17,0.08)', border: '1px solid rgba(228,91,17,0.25)',
               display: 'flex', alignItems: 'flex-start', gap: 8,
             }}>
               <AlertCircle size={13} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 1 }} />
@@ -208,21 +211,17 @@ export default function PdfModal({ jobId, completedTypes, onClose }) {
                   {pdfError.length > 120 ? pdfError.slice(0, 120) + '…' : pdfError}
                 </p>
                 <p style={{ fontFamily: '"DM Mono",monospace', fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
-                  Try the ZIP export instead — it contains all docs as Markdown.
+                  Try the ZIP export — it contains all docs as Markdown files.
                 </p>
               </div>
             </div>
           )}
 
           {/* Actions */}
-          <div style={{
-            padding: '12px 20px 16px',
-            borderTop: '1px solid var(--border)',
-            display: 'flex', flexDirection: 'column', gap: 8,
-          }}>
+          <div style={{ padding: '12px 20px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {/* PDF */}
             <button
-              onClick={() => downloadBlob('pdf', setPdfLoading)}
+              onClick={downloadPdf}
               disabled={pdfLoading || selected.size === 0}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
@@ -236,12 +235,11 @@ export default function PdfModal({ jobId, completedTypes, onClose }) {
             >
               <Download size={13} />
               {pdfLoading
-                ? 'Generating PDF… (may take 30s)'
+                ? 'Generating PDF… (may take 30–60s)'
                 : `Download PDF (${selected.size} doc${selected.size !== 1 ? 's' : ''})`
               }
             </button>
 
-            {/* Divider */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
               <span style={{ fontFamily: '"DM Mono",monospace', fontSize: 10, color: 'var(--text-muted)' }}>or</span>
@@ -250,7 +248,7 @@ export default function PdfModal({ jobId, completedTypes, onClose }) {
 
             {/* ZIP */}
             <button
-              onClick={() => downloadBlob('zip', setZipLoading)}
+              onClick={downloadZip}
               disabled={zipLoading}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
