@@ -9,13 +9,24 @@ export function useAuth() {
     api
       .get('/auth/me')
       .then((res) => {
-        const raw = res.data;
-        // Normalise field names — backend might return GitHub snake_case or Prisma camelCase
+        // FIX: /auth/me returns { user: {...} }, not the user object directly.
+        // Previously res.data was used as-is, so raw.username was undefined
+        // and everything fell back to 'user' / 'U'.
+        const raw = res.data?.user || res.data;
+
+        if (!raw || (!raw.id && !raw.username)) {
+          setUser(null);
+          return;
+        }
+
         const normalised = {
           ...raw,
-          username:  raw.username  || raw.login       || raw.name || 'user',
-          avatarUrl: raw.avatarUrl || raw.avatar_url  || raw.avatarURL || '',
+          // auth.js already saves githubUser.login as username and
+          // githubUser.avatar_url as avatarUrl — just make sure both exist
+          username:  raw.username  || raw.login      || raw.name || 'user',
+          avatarUrl: raw.avatarUrl || raw.avatar_url || raw.avatarURL || '',
         };
+
         setUser(normalised);
       })
       .catch(() => setUser(null))
