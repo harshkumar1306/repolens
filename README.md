@@ -18,7 +18,7 @@
 
 ## What is RepoLens?
 
-RepoLens is a full-stack AI documentation tool built as a final year Computer Science project. You paste any public GitHub repository URL and RepoLens:
+RepoLens is a full-stack AI documentation tool built as a Computer Science project. You paste any public GitHub repository URL and RepoLens:
 
 1. **Intelligently ingests** the repository using a 4-layer pipeline that handles repos of any size
 2. **Generates 8 structured documentation pages** in parallel using the Claude AI API
@@ -31,11 +31,32 @@ The entire experience is real-time — you watch each document appear as it's ge
 
 ## Screenshots
 
+---
+
+## Screenshots
+
 > Dashboard → Analyze a Repo → Live Generation → Results Viewer
 
-| Dashboard | Generation Progress | Results Viewer |
-|---|---|---|
-| Clean minimal landing | Live checklist via WebSockets | Tabbed doc viewer with Mermaid |
+### Dashboard
+Clean minimal landing
+
+![Dashboard](screenshots/dashboard.png)
+
+---
+
+### Generation Progress
+Live checklist via WebSockets
+
+![Generation Progress](screenshots/generation-process.png)
+
+---
+
+### Results Viewer
+Tabbed doc viewer with Mermaid
+
+![Results Viewer](screenshots/result-viewer.png)
+
+---
 
 ---
 
@@ -502,7 +523,7 @@ MIT — free to use, modify, and distribute with attribution.
 
 ## Author
 
-**Harsh Kumar** — Final Year Computer Science Project
+**Harsh Kumar** — Computer Science Student
 
 [![GitHub](https://img.shields.io/badge/GitHub-harshkumar1306-181717?style=flat-square&logo=github)](https://github.com/harshkumar1306)
 
